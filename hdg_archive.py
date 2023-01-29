@@ -200,7 +200,18 @@ while True:
         print(f"=== THREAD: {thread_num}")
 
         thread = requests.get(url + "/_/api/chan/thread/", params={"board": args.board, "num": thread_num}, headers=HEADERS)
-        thread = thread.json()
+
+        try:
+            thread = thread.json()
+        except Exception as ex:
+            print(thread.content)
+            print(f"FAILED! {thread_num} - {ex}")
+            continue
+
+        if thread_num not in thread:
+            print(f"!!! SKIP THREAD (not found): {thread_num}")
+            continue
+
         thread = thread[thread_num]
 
         op_media = thread["op"].get("media")
