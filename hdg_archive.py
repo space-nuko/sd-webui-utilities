@@ -64,7 +64,7 @@ passed_path = args.path
 
 
 sitename = os.path.splitext(os.path.basename(site))[0]
-url = site
+BASE_URL = site
 OUTPATH = os.path.join(passed_path, sitename, args.board)
 catbox_re = re.compile(r'^http(|s)://(files|litter).catbox.moe/.+')
 catbox_file_re = re.compile(r'^catbox_(.*)\.(.*)')
@@ -185,7 +185,7 @@ def worker(t):
 
 while True:
     print(f"*** Page {page} ***")
-    result = requests.get(url + "/_/api/chan/search/", params={"board": args.board, "text": "https://rentry.org/voldy", "page": page}, headers=HEADERS)
+    result = requests.get(BASE_URL + "/_/api/chan/search/", params={"board": args.board, "text": "https://rentry.org/voldy", "page": page}, headers=HEADERS)
     result = result.json()
 
     if "0" not in result:
@@ -199,14 +199,8 @@ while True:
 
         print(f"=== THREAD: {thread_num}")
 
-        thread = requests.get(url + "/_/api/chan/thread/", params={"board": args.board, "num": thread_num}, headers=HEADERS)
-
-        try:
-            thread = thread.json()
-        except Exception as ex:
-            print(thread.content)
-            print(f"FAILED! {thread_num} - {ex}")
-            continue
+        resp = requests.get(BASE_URL + "/_/api/chan/thread/", params={"board": args.board, "num": thread_num}, headers=HEADERS)
+        thread = resp.json()
 
         if thread_num not in thread:
             print(f"!!! SKIP THREAD (not found): {thread_num}")
