@@ -1,0 +1,6 @@
+requests
+mimetypes
+pathvalidate
+urlextract
+torch
+safetensors
