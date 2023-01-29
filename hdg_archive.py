@@ -98,7 +98,7 @@ def save_link(basepath, url, real_name):
         print(f"--- SKIPPING (file exists): {path}")
         return
 
-    print(f"Saving: {url} -> {path}")
+    print(f"Saving: {path}")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     resp = requests.get(url, stream=True, headers=HEADERS)
     if resp.status_code == 200:
@@ -236,6 +236,8 @@ while True:
                 print("Interrupted, exiting")
                 exit(1)
 
+        p.close()
+        p.join()
         signal.signal(signal.SIGINT, original_sigint)
 
     page += 1
