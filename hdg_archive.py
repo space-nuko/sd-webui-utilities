@@ -56,10 +56,6 @@ if not site:
     exit(1)
 
 
-page = 1
-result = {}
-
-
 passed_path = args.path
 
 
@@ -67,10 +63,119 @@ sitename = os.path.splitext(os.path.basename(site))[0]
 BASE_URL = site
 OUTPATH = os.path.join(passed_path, sitename, args.board)
 catbox_re = re.compile(r'^http(|s)://(files|litter).catbox.moe/.+')
+mega_re = re.compile(r'^http(|s)://mega(\.co|).nz/.+')
 catbox_file_re = re.compile(r'^catbox_(.*)\.(.*)')
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/12.246",
 }
+
+
+class BaseDownloader():
+    def __init__(self, site, board):
+        self.site = site
+        self.board = board
+
+    def name(self):
+        pass
+
+    def get_posts(self, page):
+        pass
+
+    def get_thread(self, post):
+        pass
+
+    def download_op_media(self, thread):
+        pass
+
+    def extract_links(self, thread):
+        pass
+
+
+class FourChanDownloader(BaseDownloader):
+    def __init__(self, site, board):
+        self.site = site
+        self.board = board
+
+    def name(self):
+        return f"{self.site}/{self.board}"
+
+    def get_posts(self, page):
+        result = requests.get(BASE_URL + "/_/api/chan/search/", params={"board": args.board, "text": "https://rentry.org/voldy", "page": page}, headers=HEADERS)
+        result = result.json()
+
+        if "0" not in result:
+            return None
+
+        posts = result["0"]["posts"]
+        return posts
+
+    def get_thread(self, post):
+        thread_num = post["thread_num"]
+
+        print(f"=== THREAD: {thread_num}")
+
+        resp = requests.get(BASE_URL + "/_/api/chan/thread/", params={"board": args.board, "num": thread_num}, headers=HEADERS)
+        thread = resp.json()
+
+        if thread_num not in thread:
+            print(f"!!! SKIP THREAD (not found): {thread_num}")
+            return None
+
+        return thread[thread_num]
+
+    def _extract_links(self, basepath, posts):
+        links = []
+        mega_links = []
+        seen = {}
+        for post_id, post in posts.items():
+            bp = basepath
+            if post["deleted"] == "1":
+                if args.ignore_deleted:
+                    continue
+                else:
+                    bp = os.path.join(basepath, "deleted")
+
+            post_media = post.get("media")
+            if post_media and not args.catbox_only:
+                link = get_media_link(bp, post_media)
+                if link and not link[1].lower() in seen:
+                    links.append(link)
+                    seen[link[1].lower()] = True
+
+            l, ml = get_post_links(bp, post)
+            for link in l:
+                if link and not link[1].lower() in seen:
+                    links.append(link)
+                    seen[link[1].lower()] = True
+
+            mega_links.extend(ml)
+
+        mega_path = os.path.join(basepath, "mega.txt")
+        os.makedirs(os.path.dirname(mega_path), exist_ok=True)
+        print(f"Saving {len(mega_links)} mega links: {mega_path}")
+        with open(mega_path, "w") as f:
+            f.write("\n".join(mega_links))
+
+        return links
+
+    def extract_links(self, thread):
+        thread_num = thread["op"]["num"]
+        basepath = os.path.join(OUTPATH, thread_num)
+
+        links = []
+
+        op_media = thread["op"].get("media")
+        if op_media:
+            link = get_media_link(basepath, op_media)
+            if link:
+                links.append(link)
+
+        if "posts" not in thread:
+            print(f"!!! SKIP THREAD (no posts): {thread_num}")
+            return links
+
+        posts = thread["posts"]
+        return links + self._extract_links(basepath, posts)
 
 
 os.makedirs(OUTPATH, exist_ok=True)
@@ -83,16 +188,16 @@ def save_link(basepath, url, real_name):
         return
 
     if args.images_only:
-      mimetype = mimetypes.guess_type(url)[0]
-      if not mimetype or (not mimetype.startswith("image/") and not mimetype.startswith("video/")):
-          return
+        mimetype = mimetypes.guess_type(url)[0]
+        if not mimetype or (not mimetype.startswith("image/") and not mimetype.startswith("video/")):
+            return
 
     path = os.path.join(basepath, real_name)
     if len(path) >= 259:
         p, e = os.path.splitext(path)
         p = p[:250]
         path = f"{p}{e}"
-    path = sanitize_filepath(path, platform="Windows")
+        path = sanitize_filepath(path, platform="Windows")
 
     if os.path.isfile(path):
         print(f"--- SKIPPING (file exists): {path}")
@@ -138,9 +243,10 @@ def get_post_links(basepath, post):
     basepath = os.path.join(basepath, "catbox")
     comment = post["comment"]
     if not comment:
-        return []
+        return [], []
 
     links = []
+    mega_links = []
 
     extractor = URLExtract()
     urls = extractor.find_urls(comment)
@@ -148,34 +254,10 @@ def get_post_links(basepath, post):
         if catbox_re.match(url):
             real_name = os.path.basename(url)
             links.append((basepath, url, real_name))
+        elif mega_re.match(url):
+            mega_links.append(url)
 
-    return links
-
-
-def extract_links(posts):
-    links = []
-    seen = {}
-    for post_id, post in posts.items():
-        bp = basepath
-        if post["deleted"] == "1":
-            if args.ignore_deleted:
-                continue
-            else:
-                bp = os.path.join(basepath, "deleted")
-
-        post_media = post.get("media")
-        if post_media and not args.catbox_only:
-            link = get_media_link(bp, post_media)
-            if link and not link[1].lower() in seen:
-                links.append(link)
-                seen[link[1].lower()] = True
-
-        for link in get_post_links(bp, post):
-            if link and not link[1].lower() in seen:
-                links.append(link)
-                seen[link[1].lower()] = True
-
-    return links
+    return links, mega_links
 
 
 def worker(t):
@@ -183,44 +265,24 @@ def worker(t):
     save_link(basepath, url, real_name)
 
 
+page = 1
+downloader = FourChanDownloader(site, board)
+
+
 while True:
     print(f"*** Page {page} ***")
-    result = requests.get(BASE_URL + "/_/api/chan/search/", params={"board": args.board, "text": "https://rentry.org/voldy", "page": page}, headers=HEADERS)
-    result = result.json()
 
-    if "0" not in result:
+    posts = downloader.get_posts(page)
+    if posts is None:
         print("Finished")
         break
 
-    posts = result["0"]["posts"]
     for post in posts:
-        thread_num = post["thread_num"]
-        basepath = os.path.join(OUTPATH, thread_num)
-
-        print(f"=== THREAD: {thread_num}")
-
-        resp = requests.get(BASE_URL + "/_/api/chan/thread/", params={"board": args.board, "num": thread_num}, headers=HEADERS)
-        thread = resp.json()
-
-        if thread_num not in thread:
-            print(f"!!! SKIP THREAD (not found): {thread_num}")
+        thread = downloader.get_thread(post)
+        if not thread:
             continue
 
-        thread = thread[thread_num]
-
-        op_media = thread["op"].get("media")
-        if op_media:
-            link = get_media_link(basepath, op_media)
-            if link:
-                basepath, url, real_name = link
-                save_link(basepath, url, real_name)
-
-        if "posts" not in thread:
-            print(f"!!! SKIP THREAD (no posts): {thread_num}")
-            continue
-
-        posts = thread["posts"]
-        links = extract_links(posts)
+        links = downloader.extract_links(thread)
 
         print(f"+++ {len(links)} links to download.")
 

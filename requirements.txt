@@ -1,6 +1,7 @@
 requests
-mimetypes
+#mimetypes
 pathvalidate
 urlextract
 torch
 safetensors
+beautifulsoup4
