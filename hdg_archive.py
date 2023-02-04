@@ -185,6 +185,7 @@ class FourChanDownloader(BaseDownloader):
 
             post_media = post.get("media")
             if post_media:
+                link = self.get_media_link(bp, post_media)
                 if link and not link[1].lower() in seen:
                     links.append(link)
                     seen[link[1].lower()] = True
