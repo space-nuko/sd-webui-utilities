@@ -4,7 +4,7 @@
 # Searches for archived threads on /h/ with "https://rentry.org/voldy" in the OP
 # and downloads all images/catbox files from them
 #
-# Dependencies: pip install requests pathvalidate urlextract beautifulsoup4
+# Dependencies: pip install requests pathvalidate urlextract beautifulsoup4 dateutil
 #
 # Usage: python hdg_archive.py [output folder] [--board h] [--process-count 8] [--catbox-only] [--images-only] [--ignore-deleted]
 #
@@ -17,6 +17,7 @@ import os
 import os.path
 import re
 import mimetypes
+import dateutil.parser
 from bs4 import BeautifulSoup
 from pathvalidate import sanitize_filepath
 from urlextract import URLExtract
@@ -133,7 +134,7 @@ class FourChanDownloader(BaseDownloader):
         return thread[thread_num]
 
 
-    def get_media_link(self, basepath, media):
+    def get_media_link(self, basepath, media, mtime):
         m = catbox_file_re.match(media["media_filename"])
         if m: # Convert catbox userscript link
             catbox_id = m.group(1)
@@ -148,10 +149,10 @@ class FourChanDownloader(BaseDownloader):
             media_filename = os.path.splitext(media["media_filename"])[0]
             real_name = f"{media_basename}_{media_filename}{media_ext}"
             url = media["media_link"]
-        return (basepath, url, real_name)
+        return (basepath, url, real_name, mtime)
 
 
-    def get_post_links(self, basepath, post):
+    def get_post_links(self, basepath, post, mtime):
         basepath = os.path.join(basepath, "catbox")
         comment = post["comment"]
         if not comment:
@@ -165,7 +166,7 @@ class FourChanDownloader(BaseDownloader):
         for url in urls:
             if catbox_re.match(url):
                 real_name = os.path.basename(url)
-                links.append((basepath, url, real_name))
+                links.append((basepath, url, real_name, mtime))
             elif mega_re.match(url):
                 mega_links.append(url)
 
@@ -178,6 +179,7 @@ class FourChanDownloader(BaseDownloader):
         seen = {}
         for post_id, post in posts.items():
             bp = basepath
+            mtime = post["timestamp"]
             if post["deleted"] == "1":
                 if args.ignore_deleted:
                     continue
@@ -186,12 +188,12 @@ class FourChanDownloader(BaseDownloader):
 
             post_media = post.get("media")
             if post_media:
-                link = self.get_media_link(bp, post_media)
+                link = self.get_media_link(bp, post_media, mtime)
                 if link and not link[1].lower() in seen:
                     links.append(link)
                     seen[link[1].lower()] = True
 
-            l, ml = self.get_post_links(bp, post)
+            l, ml = self.get_post_links(bp, post, mtime)
             for link in l:
                 if link and not link[1].lower() in seen:
                     links.append(link)
@@ -216,7 +218,8 @@ class FourChanDownloader(BaseDownloader):
 
         op_media = thread["op"].get("media")
         if op_media:
-            link = self.get_media_link(basepath, op_media)
+            mtime = thread["op"]["timestamp"]
+            link = self.get_media_link(basepath, op_media, mtime)
             if link:
                 links.append(link)
 
@@ -382,7 +385,7 @@ class EightChanDownloader(BaseDownloader):
         return thread
 
 
-    def get_file_link(self, basepath, file):
+    def get_file_link(self, basepath, file, mtime):
         m = catbox_file_re.match(file["originalName"])
         if m: # Convert catbox userscript link
             catbox_id = m.group(1)
@@ -397,10 +400,10 @@ class EightChanDownloader(BaseDownloader):
             media_filename = os.path.splitext(file["originalName"])[0]
             real_name = f"{media_basename}_{media_filename}{media_ext}"
             url = f"{BASE_URL}{file['path']}"
-        return (basepath, url, real_name)
+        return (basepath, url, real_name, mtime)
 
 
-    def get_post_links(self, basepath, post):
+    def get_post_links(self, basepath, post, mtime):
         basepath = os.path.join(basepath, "catbox")
         message = post["message"]
         if not message:
@@ -414,7 +417,7 @@ class EightChanDownloader(BaseDownloader):
         for url in urls:
             if catbox_re.match(url):
                 real_name = os.path.basename(url)
-                links.append((basepath, url, real_name))
+                links.append((basepath, url, real_name, mtime))
             elif mega_re.match(url):
                 mega_links.append(url)
 
@@ -427,13 +430,14 @@ class EightChanDownloader(BaseDownloader):
         seen = {}
         for post in posts:
             post_files = post.get("files", [])
+            mtime = dateutil.parser.isoparse(post["creation"])
             for post_file in post_files:
-                link = self.get_file_link(basepath, post_file)
+                link = self.get_file_link(basepath, post_file, mtime)
                 if link and not link[1].lower() in seen:
                     links.append(link)
                     seen[link[1].lower()] = True
 
-            l, ml = self.get_post_links(basepath, post)
+            l, ml = self.get_post_links(basepath, post, mtime)
             for link in l:
                 if link and not link[1].lower() in seen:
                     links.append(link)
@@ -458,7 +462,8 @@ class EightChanDownloader(BaseDownloader):
 
         op_files = thread.get("files", [])
         for file in op_files:
-            link = self.get_file_link(basepath, file)
+            mtime = dateutil.parser.isoparse(thread["creation"])
+            link = self.get_file_link(basepath, file, mtime)
             if link:
                 links.append(link)
 
@@ -584,7 +589,7 @@ class WarosuDownloader(BaseDownloader):
         return self._extract_links(basepath, posts)
 
 
-def save_link(basepath, url, real_name):
+def save_link(basepath, url, real_name, mtime):
     global g_run_loops
     if not g_run_loops:
         return
@@ -603,6 +608,7 @@ def save_link(basepath, url, real_name):
 
     if os.path.isfile(path):
         print(f"--- SKIPPING (file exists): {path}")
+        os.utime(path, (mtime, mtime))
         return
 
     print(f"Saving: {path}")
@@ -622,10 +628,13 @@ def save_link(basepath, url, real_name):
     else:
         print(f"*** FAILED saving: {url}")
 
+    if os.path.isfile(path):
+        os.utime(path, (mtime, mtime))
+
 
 def worker(t):
-    basepath, url, real_name = t
-    save_link(basepath, url, real_name)
+    basepath, url, real_name, mtime = t
+    save_link(basepath, url, real_name, mtime)
 
 
 page = 1
