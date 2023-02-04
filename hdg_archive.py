@@ -8,7 +8,7 @@
 #
 # Usage: python hdg_archive.py [output folder] [--board h] [--process-count 8] [--catbox-only] [--images-only] [--ignore-deleted]
 #
-# Set --board to "5chan" for fate.5ch.net, "hdg" for the haven
+# Set --board to "liveuranus" for fate.5ch.net, "hdg" for the haven
 
 import requests
 import json
@@ -17,6 +17,7 @@ import os
 import os.path
 import re
 import mimetypes
+from datetime import datetime
 import dateutil.parser
 from bs4 import BeautifulSoup
 from pathvalidate import sanitize_filepath
@@ -49,7 +50,7 @@ sites = {
     "https://archiveofsins.com": ["h", "hc", "hm", "i", "lgbt", "r", "s", "soc", "t", "u"],
     "https://warosu.org": ["vt"],  # archived.moe disables search on /vt/ so we must grudgingly scrape warosu.org, which doesn't have an API
     "https://8chan.moe": ["hdg"],
-    "https://fate.5ch.net": ["5chan", "liveuranus"]
+    "https://fate.5ch.net": ["liveuranus"]
 }
 
 board_to_site = {}
@@ -325,21 +326,33 @@ class FiveChanDownloader(BaseDownloader):
         thread_num = r.search(url).groups(1)[0]
         basepath = os.path.join(OUTPATH, thread_num)
         thread = page.find("div", class_="thread")
-        extractor = URLExtract()
 
-        urls = extractor.find_urls(thread.text)
         links = []
         mega_links = []
-        for url in urls:
-            url = url.replace("http://jump.5ch.net/?", "")
-            real_name = os.path.basename(url)
-            if catbox_re.match(url):
-                links.append((os.path.join(basepath, "catbox"), url, real_name))
-            elif mega_re.match(url):
-                mega_links.append(url)
-            elif imgur_re.match(url):
+
+        date_re = re.compile(r'\([^)]+\)')
+        extractor = URLExtract()
+        for post in thread.find_all("div", class_="post"):
+            date = post.find("span", class_="date")
+            if "Over" in date.text: # Over 1000
+               continue
+
+            date_str = re.sub(date_re, "", date.text)
+            mtime = int(datetime.timestamp(datetime.strptime(date_str, '%Y/%m/%d %H:%M:%S.%f')))
+
+            message = post.find("div", class_="message")
+            urls = extractor.find_urls(message.text)
+            print(urls)
+            for url in urls:
+                url = url.replace("http://jump.5ch.net/?", "")
                 real_name = os.path.basename(url)
-                links.append((os.path.join(basepath, "imgur"), url, real_name))
+                if catbox_re.match(url):
+                    links.append((os.path.join(basepath, "catbox"), url, real_name, mtime))
+                elif mega_re.match(url):
+                    mega_links.append(url)
+                elif imgur_re.match(url):
+                    real_name = os.path.basename(url)
+                    links.append((os.path.join(basepath, "imgur"), url, real_name, mtime))
 
         mega_path = os.path.join(basepath, "mega.txt")
         os.makedirs(os.path.dirname(mega_path), exist_ok=True)
@@ -430,7 +443,7 @@ class EightChanDownloader(BaseDownloader):
         seen = {}
         for post in posts:
             post_files = post.get("files", [])
-            mtime = dateutil.parser.isoparse(post["creation"])
+            mtime = datetime.timestamp(dateutil.parser.isoparse(post["creation"]))
             for post_file in post_files:
                 link = self.get_file_link(basepath, post_file, mtime)
                 if link and not link[1].lower() in seen:
@@ -462,7 +475,7 @@ class EightChanDownloader(BaseDownloader):
 
         op_files = thread.get("files", [])
         for file in op_files:
-            mtime = dateutil.parser.isoparse(thread["creation"])
+            mtime = datetime.timestamp(dateutil.parser.isoparse(thread["creation"]))
             link = self.get_file_link(basepath, file, mtime)
             if link:
                 links.append(link)
