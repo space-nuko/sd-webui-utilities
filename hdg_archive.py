@@ -46,6 +46,7 @@ args = parser.parse_args()
 sites = {
     "https://desuarchive.org": ["a", "aco", "an", "c", "cgl", "co", "d", "fit", "g", "his", "int", "k", "m", "mlp", "mu", "q", "qa", "r9k", "tg", "trash", "vr", "wsg"],
     "https://archiveofsins.com": ["h", "hc", "hm", "i", "lgbt", "r", "s", "soc", "t", "u"],
+    "https://warosu.org": ["vt"],  # archived.moe disables search on /vt/, so we must grudgingly scrape warosu.org, which doesn't have an API
     "https://8chan.moe": ["hdg"],
     "https://fate.5ch.net": ["5chan", "liveuranus"]
 }
@@ -469,6 +470,118 @@ class EightChanDownloader(BaseDownloader):
         return links + self._extract_links(basepath, posts)
 
 
+class WarosuDownloader(BaseDownloader):
+    def __init__(self, site, board):
+       super(WarosuDownloader, self).__init__(site, board)
+
+    def name(self):
+        return f"{self.site}/{self.board}"
+
+    def get_posts(self, page):
+        if page > 1:
+           return None
+        result = requests.get(f"{BASE_URL}/{self.board}/", params={"page": page, "task": "search", "ghost": "", "search_text": "rentry.org/voldy"}, headers=self.headers)
+
+        if not result:
+            return None
+
+        page = BeautifulSoup(result.text, features="html5lib")
+        replies = page.find_all("td", class_="reply")
+
+        return replies
+
+    def get_thread(self, post):
+        thread_num = post["id"].replace("p", "")
+        print(thread_num)
+
+        print(f"=== THREAD: {thread_num}")
+
+        resp = requests.get(f"{BASE_URL}/{self.board}/thread/S{thread_num}", headers=self.headers)
+
+        return BeautifulSoup(resp.text, features="html5lib")
+
+
+    def get_file_link(self, basepath, post):
+        span = post.find("span", text=re.compile(r'^File:'))
+        if not span:
+           return None
+
+        split = span.text.split(",", 3)
+        original_name = split[2]
+        a = post.find("img", class_="thumb").parent
+        url = "https:" + a.get("href")
+
+        m = catbox_file_re.match(original_name)
+        if m: # Convert catbox userscript link
+            catbox_id = m.group(1)
+            catbox_ext = m.group(2)
+            real_name = f"{catbox_id}.{catbox_ext}"
+            url = f"https://files.catbox.moe/{real_name}"
+            basepath = os.path.join(basepath, "catbox")
+        else:
+            if args.catbox_only:
+                return
+            media_basename, media_ext = os.path.splitext(os.path.basename(url))
+            media_filename = os.path.splitext(original_name)[0].strip()
+            real_name = f"{media_basename}_{media_filename}{media_ext}"
+        return (basepath, url, real_name)
+
+
+    def get_post_links(self, basepath, post):
+        basepath = os.path.join(basepath, "catbox")
+        message = post.select_one("p", itemprop="text")
+        if not message:
+            return [], []
+
+        links = []
+        mega_links = []
+
+        for a in message.find_all("a"):
+            url = a.get("href")
+            if catbox_re.match(url):
+                real_name = os.path.basename(url)
+                links.append((basepath, url, real_name))
+            elif mega_re.match(url):
+                mega_links.append(url)
+
+        return links, mega_links
+
+
+    def _extract_links(self, basepath, posts):
+        links = []
+        mega_links = []
+        seen = {}
+        for post in posts:
+            link = self.get_file_link(basepath, post)
+            if link and not link[1].lower() in seen:
+                links.append(link)
+                seen[link[1].lower()] = True
+
+            l, ml = self.get_post_links(basepath, post)
+            for link in l:
+                if link and not link[1].lower() in seen:
+                    links.append(link)
+                    seen[link[1].lower()] = True
+
+            mega_links.extend(ml)
+
+        mega_path = os.path.join(basepath, "mega.txt")
+        os.makedirs(os.path.dirname(mega_path), exist_ok=True)
+        print(f"Saving {len(mega_links)} mega links: {mega_path}")
+        with open(mega_path, "w") as f:
+            f.write("\n".join(mega_links))
+
+        return links
+
+
+    def extract_links(self, thread):
+        thread_num = thread.select_one(".content > div")["id"].replace("p", "")
+        basepath = os.path.join(OUTPATH, str(thread_num))
+
+        posts = thread.find_all("td", class_="reply")
+        return self._extract_links(basepath, posts)
+
+
 def save_link(basepath, url, real_name):
     global g_run_loops
     if not g_run_loops:
@@ -506,6 +619,8 @@ def save_link(basepath, url, real_name):
             os.unlink(path)
     else:
         print(f"*** FAILED saving: {url}")
+        print(resp.text)
+        print(f"+++ {resp.url} +++")
 
 
 def worker(t):
@@ -518,6 +633,8 @@ if site == "https://fate.5ch.net":
    downloader = FiveChanDownloader(site, "liveuranus")
 elif site == "https://8chan.moe":
    downloader = EightChanDownloader(site, args.board)
+elif site == "https://warosu.org":
+   downloader = WarosuDownloader(site, args.board)
 else:
    downloader = FourChanDownloader(site, args.board)
 
