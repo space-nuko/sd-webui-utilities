@@ -185,7 +185,6 @@ class FourChanDownloader(BaseDownloader):
 
             post_media = post.get("media")
             if post_media:
-                link = self.get_media_link(bp, post_media)
                 if link and not link[1].lower() in seen:
                     links.append(link)
                     seen[link[1].lower()] = True
@@ -358,8 +357,6 @@ class EightChanDownloader(BaseDownloader):
         if page > 1:
            return None
         result = requests.get(f"{BASE_URL}/{self.board}/catalog.json", params={"page": page}, headers=self.headers)
-        print(result.text)
-        print(f"{BASE_URL}/{self.board}/catalog.json")
         result = result.json()
 
         if not result:
@@ -430,17 +427,15 @@ class EightChanDownloader(BaseDownloader):
             post_files = post.get("files", [])
             for post_file in post_files:
                 link = self.get_file_link(basepath, post_file)
-                url = link[1].lower()
-                if link and not url in seen:
+                if link and not link[1].lower() in seen:
                     links.append(link)
-                    seen[url] = True
+                    seen[link[1].lower()] = True
 
             l, ml = self.get_post_links(basepath, post)
             for link in l:
-                url = link[1].lower()
-                if link and not url in seen:
+                if link and not link[1].lower() in seen:
                     links.append(link)
-                    seen[url] = True
+                    seen[link[1].lower()] = True
 
             mega_links.extend(ml)
 
