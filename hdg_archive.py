@@ -7,6 +7,8 @@
 # Dependencies: pip install requests pathvalidate urlextract mimetypes
 #
 # Usage: python hdg_archive.py [output folder] [--board h] [--process-count 8] [--catbox-only] [--images-only] [--ignore-deleted]
+#
+# Set --board to "5chan" for fate.5ch.net, "hdg" for the haven
 
 import requests
 import json
@@ -44,6 +46,7 @@ args = parser.parse_args()
 sites = {
     "https://desuarchive.org": ["a", "aco", "an", "c", "cgl", "co", "d", "fit", "g", "his", "int", "k", "m", "mlp", "mu", "q", "qa", "r9k", "tg", "trash", "vr", "wsg"],
     "https://archiveofsins.com": ["h", "hc", "hm", "i", "lgbt", "r", "s", "soc", "t", "u"],
+    "https://8chan.moe": ["hdg"],
     "https://fate.5ch.net": ["5chan", "liveuranus"]
 }
 
@@ -60,6 +63,7 @@ if not site:
 
 
 passed_path = args.path
+print(site)
 
 
 sitename = os.path.splitext(os.path.basename(site))[0]
@@ -113,6 +117,8 @@ class FourChanDownloader(BaseDownloader):
 
     def get_thread(self, post):
         thread_num = post["thread_num"]
+        print(thread_num)
+        print(post["num"])
 
         print(f"=== THREAD: {thread_num}")
 
@@ -136,7 +142,7 @@ class FourChanDownloader(BaseDownloader):
             basepath = os.path.join(basepath, "catbox")
         else:
             if args.catbox_only:
-                return
+                return None
             media_basename, media_ext = os.path.splitext(media["media"])
             media_filename = os.path.splitext(media["media_filename"])[0]
             real_name = f"{media_basename}_{media_filename}{media_ext}"
@@ -178,7 +184,7 @@ class FourChanDownloader(BaseDownloader):
                     bp = os.path.join(basepath, "deleted")
 
             post_media = post.get("media")
-            if post_media and not args.catbox_only:
+            if post_media:
                 link = self.get_media_link(bp, post_media)
                 if link and not link[1].lower() in seen:
                     links.append(link)
@@ -340,8 +346,131 @@ class FiveChanDownloader(BaseDownloader):
         return links
 
 
-os.makedirs(OUTPATH, exist_ok=True)
-print(f"Saving files in {site}/{args.board} to {OUTPATH}...")
+class EightChanDownloader(BaseDownloader):
+    def __init__(self, site, board):
+       super(EightChanDownloader, self).__init__(site, board)
+       self.headers["Cookie"] = "splash=1;"
+
+    def name(self):
+        return f"{self.site}/{self.board}"
+
+    def get_posts(self, page):
+        if page > 1:
+           return None
+        result = requests.get(f"{BASE_URL}/{self.board}/catalog.json", params={"page": page}, headers=self.headers)
+        print(result.text)
+        print(f"{BASE_URL}/{self.board}/catalog.json")
+        result = result.json()
+
+        if not result:
+            return None
+
+        return result
+
+    def get_thread(self, post):
+        thread_num = post["threadId"]
+        print(thread_num)
+
+        print(f"=== THREAD: {thread_num}")
+
+        resp = requests.get(f"{BASE_URL}/{self.board}/res/{thread_num}.json", headers=self.headers)
+        thread = resp.json()
+
+        if "posts" not in thread:
+            print(f"!!! SKIP THREAD (not found): {thread_num}")
+            return None
+
+        return thread
+
+
+    def get_file_link(self, basepath, file):
+        m = catbox_file_re.match(file["originalName"])
+        if m: # Convert catbox userscript link
+            catbox_id = m.group(1)
+            catbox_ext = m.group(2)
+            real_name = f"{catbox_id}.{catbox_ext}"
+            url = f"https://files.catbox.moe/{real_name}"
+            basepath = os.path.join(basepath, "catbox")
+        else:
+            if args.catbox_only:
+                return
+            media_basename, media_ext = os.path.splitext(os.path.basename(file["path"]))
+            media_filename = os.path.splitext(file["originalName"])[0]
+            real_name = f"{media_basename}_{media_filename}{media_ext}"
+            url = f"{BASE_URL}{file['path']}"
+        return (basepath, url, real_name)
+
+
+    def get_post_links(self, basepath, post):
+        basepath = os.path.join(basepath, "catbox")
+        message = post["message"]
+        if not message:
+            return [], []
+
+        links = []
+        mega_links = []
+
+        extractor = URLExtract()
+        urls = extractor.find_urls(message)
+        for url in urls:
+            if catbox_re.match(url):
+                real_name = os.path.basename(url)
+                links.append((basepath, url, real_name))
+            elif mega_re.match(url):
+                mega_links.append(url)
+
+        return links, mega_links
+
+
+    def _extract_links(self, basepath, posts):
+        links = []
+        mega_links = []
+        seen = {}
+        for post in posts:
+            post_files = post.get("files", [])
+            for post_file in post_files:
+                link = self.get_file_link(basepath, post_file)
+                url = link[1].lower()
+                if link and not url in seen:
+                    links.append(link)
+                    seen[url] = True
+
+            l, ml = self.get_post_links(basepath, post)
+            for link in l:
+                url = link[1].lower()
+                if link and not url in seen:
+                    links.append(link)
+                    seen[url] = True
+
+            mega_links.extend(ml)
+
+        mega_path = os.path.join(basepath, "mega.txt")
+        os.makedirs(os.path.dirname(mega_path), exist_ok=True)
+        print(f"Saving {len(mega_links)} mega links: {mega_path}")
+        with open(mega_path, "w") as f:
+            f.write("\n".join(mega_links))
+
+        return links
+
+
+    def extract_links(self, thread):
+        thread_num = thread["threadId"]
+        basepath = os.path.join(OUTPATH, str(thread_num))
+
+        links = []
+
+        op_files = thread.get("files", [])
+        for file in op_files:
+            link = self.get_file_link(basepath, file)
+            if link:
+                links.append(link)
+
+        if "posts" not in thread:
+            print(f"!!! SKIP THREAD (no posts): {thread_num}")
+            return links
+
+        posts = thread["posts"]
+        return links + self._extract_links(basepath, posts)
 
 
 def save_link(basepath, url, real_name):
@@ -359,7 +488,7 @@ def save_link(basepath, url, real_name):
         p, e = os.path.splitext(path)
         p = p[:250]
         path = f"{p}{e}"
-        path = sanitize_filepath(path, platform="Windows")
+    path = sanitize_filepath(path, platform="Windows")
 
     if os.path.isfile(path):
         print(f"--- SKIPPING (file exists): {path}")
@@ -390,9 +519,15 @@ def worker(t):
 
 page = 1
 if site == "https://fate.5ch.net":
-   downloader = FiveChanDownloader("https://fate.5ch.net", "liveuranus")
+   downloader = FiveChanDownloader(site, "liveuranus")
+elif site == "https://8chan.moe":
+   downloader = EightChanDownloader(site, args.board)
 else:
-   downloader = FourChanDownloader(site, board)
+   downloader = FourChanDownloader(site, args.board)
+
+
+os.makedirs(OUTPATH, exist_ok=True)
+print(f"Saving files in /{downloader.name()} to {OUTPATH}...")
 
 
 while True:

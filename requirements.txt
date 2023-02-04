@@ -5,3 +5,4 @@ urlextract
 torch
 safetensors
 beautifulsoup4
+ffmpeg-python
