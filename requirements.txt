@@ -7,4 +7,5 @@ beautifulsoup4
 ffmpeg-python
 python-dotenv
 hydrus-api
-dateutil
+#dateutil
+lark
