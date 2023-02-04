@@ -530,7 +530,7 @@ class WarosuDownloader(BaseDownloader):
            return None
 
         split = span.text.split(",", 3)
-        original_name = split[2]
+        original_name = split[2].strip()
         a = post.find("img", class_="thumb").parent
         url = "https:" + a.get("href")
 
@@ -545,7 +545,7 @@ class WarosuDownloader(BaseDownloader):
             if args.catbox_only:
                 return
             media_basename, media_ext = os.path.splitext(os.path.basename(url))
-            media_filename = os.path.splitext(original_name)[0].strip()
+            media_filename = os.path.splitext(original_name)[0]
             real_name = f"{media_basename}_{media_filename}{media_ext}"
         return (basepath, url, real_name, mtime)
 
