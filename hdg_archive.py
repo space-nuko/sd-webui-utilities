@@ -46,7 +46,7 @@ args = parser.parse_args()
 sites = {
     "https://desuarchive.org": ["a", "aco", "an", "c", "cgl", "co", "d", "fit", "g", "his", "int", "k", "m", "mlp", "mu", "q", "qa", "r9k", "tg", "trash", "vr", "wsg"],
     "https://archiveofsins.com": ["h", "hc", "hm", "i", "lgbt", "r", "s", "soc", "t", "u"],
-    "https://warosu.org": ["vt"],  # archived.moe disables search on /vt/, so we must grudgingly scrape warosu.org, which doesn't have an API
+    "https://warosu.org": ["vt"],  # archived.moe disables search on /vt/ so we must grudgingly scrape warosu.org, which doesn't have an API
     "https://8chan.moe": ["hdg"],
     "https://fate.5ch.net": ["5chan", "liveuranus"]
 }
@@ -478,9 +478,7 @@ class WarosuDownloader(BaseDownloader):
         return f"{self.site}/{self.board}"
 
     def get_posts(self, page):
-        if page > 1:
-           return None
-        result = requests.get(f"{BASE_URL}/{self.board}/", params={"page": page, "task": "search", "ghost": "", "search_text": "rentry.org/voldy"}, headers=self.headers)
+        result = requests.get(f"{BASE_URL}/{self.board}/", params={"offset": (page-1) * 24, "task": "search", "ghost": "", "search_text": "rentry.org/voldy"}, headers=self.headers)
 
         if not result:
             return None
@@ -575,7 +573,11 @@ class WarosuDownloader(BaseDownloader):
 
 
     def extract_links(self, thread):
-        thread_num = thread.select_one(".content > div")["id"].replace("p", "")
+        content = thread.select_one(".content > div")
+        if not content:
+           return []
+
+        thread_num = content["id"].replace("p", "")
         basepath = os.path.join(OUTPATH, str(thread_num))
 
         posts = thread.find_all("td", class_="reply")
@@ -619,8 +621,6 @@ def save_link(basepath, url, real_name):
             os.unlink(path)
     else:
         print(f"*** FAILED saving: {url}")
-        print(resp.text)
-        print(f"+++ {resp.url} +++")
 
 
 def worker(t):
