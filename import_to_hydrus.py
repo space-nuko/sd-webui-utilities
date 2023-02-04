@@ -172,8 +172,13 @@ def import_path(client, path, tags=(), recursive=True, service_names=("stable-di
             continue
 
         directory_path, filename = os.path.split(path)
-        image = Image.open(path)
-        image.load()
+        try:
+            image = Image.open(path)
+            image.load()
+        except Exception as ex:
+            print(f"!!! FAILED to open: {path} ({ex})")
+            continue
+
         if "parameters" not in image.info:
             continue
 
