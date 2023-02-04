@@ -132,8 +132,10 @@ def get_tags_from_pnginfo(image):
     tokens = set()
 
     steps = 20
-    if "steps" in settings:
-        steps = int(settings["steps"])
+    for t in settings:
+        if t.startswith("steps:"):
+            steps = int(t.replace("steps:", ""))
+            break
 
     # Reconstruct tags from parsed attention
     for parsed in prompt_parser.get_learned_conditioning_prompt_schedules([prompt], steps):
