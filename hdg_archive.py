@@ -74,8 +74,9 @@ BASE_URL = site
 OUTPATH = os.path.join(passed_path, sitename, args.board)
 catbox_re = re.compile(r'^http(|s)://(files|litter).catbox.moe/.+')
 mega_re = re.compile(r'^http(|s)://mega(\.co|).nz/.+')
+majinai_re = re.compile(r'^http(|s)://(www.|)majinai.art/.+\.(gif|png|jpg|jpeg)')
 catbox_file_re = re.compile(r'^catbox_(.*)\.(.*)')
-imgur_re = re.compile(r'^http(|s)://i.imgur.com/.+\.(gif|png|jpg|jpeg)')
+imgur_re = re.compile(r'^http(|s)://(i.|)imgur.com/.+\.(gif|png|jpg|jpeg)')
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/12.246",}
 
 
@@ -115,7 +116,7 @@ class FourChanDownloader(BaseDownloader):
         if "0" not in result:
             return None
 
-        posts = result["0"]["posts"]
+        posts = filter(lambda p: p["op"] == "1", result["0"]["posts"])
         return posts
 
     def get_thread(self, post):
@@ -154,7 +155,6 @@ class FourChanDownloader(BaseDownloader):
 
 
     def get_post_links(self, basepath, post, mtime):
-        basepath = os.path.join(basepath, "catbox")
         comment = post["comment"]
         if not comment:
             return [], []
@@ -166,10 +166,15 @@ class FourChanDownloader(BaseDownloader):
         urls = extractor.find_urls(comment)
         for url in urls:
             if catbox_re.match(url):
+                bp = os.path.join(basepath, "catbox")
                 real_name = os.path.basename(url)
-                links.append((basepath, url, real_name, mtime))
+                links.append((bp, url, real_name, mtime))
             elif mega_re.match(url):
                 mega_links.append(url)
+            elif majinai_re.match(url):
+                bp = os.path.join(basepath, "majinai")
+                real_name = os.path.basename(url)
+                links.append((bp, url, real_name, mtime))
 
         return links, mega_links
 
@@ -342,7 +347,6 @@ class FiveChanDownloader(BaseDownloader):
 
             message = post.find("div", class_="message")
             urls = extractor.find_urls(message.text)
-            print(urls)
             for url in urls:
                 url = url.replace("http://jump.5ch.net/?", "")
                 real_name = os.path.basename(url)
@@ -353,6 +357,9 @@ class FiveChanDownloader(BaseDownloader):
                 elif imgur_re.match(url):
                     real_name = os.path.basename(url)
                     links.append((os.path.join(basepath, "imgur"), url, real_name, mtime))
+                elif majinai_re.match(url):
+                    real_name = os.path.basename(url)
+                    links.append((os.path.join(basepath, "majinai"), url, real_name, mtime))
 
         mega_path = os.path.join(basepath, "mega.txt")
         os.makedirs(os.path.dirname(mega_path), exist_ok=True)
