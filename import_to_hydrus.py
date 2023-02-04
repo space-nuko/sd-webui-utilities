@@ -29,6 +29,8 @@ import prompt_parser
 import hydrus_api
 import hydrus_api.utils
 
+Image.MAX_IMAGE_PIXELS = None
+
 ERROR_EXIT_CODE = 1
 REQUIRED_PERMISSIONS = {hydrus_api.Permission.IMPORT_FILES, hydrus_api.Permission.ADD_TAGS}
 addnet_re = re.compile(r'^addnet_.+_\d+')
