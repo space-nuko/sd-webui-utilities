@@ -29,8 +29,6 @@ import prompt_parser
 import hydrus_api
 import hydrus_api.utils
 
-Image.MAX_IMAGE_PIXELS = None
-
 ERROR_EXIT_CODE = 1
 REQUIRED_PERMISSIONS = {hydrus_api.Permission.IMPORT_FILES, hydrus_api.Permission.ADD_TAGS}
 addnet_re = re.compile(r'^addnet_.+_\d+')
@@ -42,6 +40,7 @@ argument_parser.add_argument("paths", nargs="+")
 argument_parser.add_argument("--tag", "-t", action="append", dest="tags", default=[])
 argument_parser.add_argument("--service", "-s", action="append", dest="services", default=["stable-diffusion-webui"])
 argument_parser.add_argument("--no-recursive", "-n", action="store_false", dest="recursive")
+argument_parser.add_argument("--no-protect-decompression", "-d", action="store_false", dest="protect_decompression")
 #argument_parser.add_argument("--no-read-metadata", "-m", action="store_false", dest="read_metadata")
 argument_parser.add_argument("--api-url", "-a", default=hydrus_api.DEFAULT_API_URL)
 argument_parser.add_argument("--api_key", "-k", default=None)
@@ -194,6 +193,9 @@ def main(arguments):
     if not hydrus_api.utils.verify_permissions(client, REQUIRED_PERMISSIONS):
         print("The API key does not grant all required permissions:", REQUIRED_PERMISSIONS)
         return ERROR_EXIT_CODE
+
+    if not arguments.protect_decompression:
+        Image.MAX_IMAGE_PIXELS = None
 
     for path in arguments.paths:
         print(f"Importing {path}...")
