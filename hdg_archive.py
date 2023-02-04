@@ -504,7 +504,7 @@ class WarosuDownloader(BaseDownloader):
         return BeautifulSoup(resp.text, features="html5lib")
 
 
-    def get_file_link(self, basepath, post):
+    def get_file_link(self, basepath, post, mtime):
         span = post.find("span", text=re.compile(r'^File:'))
         if not span:
            return None
@@ -527,10 +527,10 @@ class WarosuDownloader(BaseDownloader):
             media_basename, media_ext = os.path.splitext(os.path.basename(url))
             media_filename = os.path.splitext(original_name)[0].strip()
             real_name = f"{media_basename}_{media_filename}{media_ext}"
-        return (basepath, url, real_name)
+        return (basepath, url, real_name, mtime)
 
 
-    def get_post_links(self, basepath, post):
+    def get_post_links(self, basepath, post, mtime):
         basepath = os.path.join(basepath, "catbox")
         message = post.select_one("p", itemprop="text")
         if not message:
@@ -543,7 +543,7 @@ class WarosuDownloader(BaseDownloader):
             url = a.get("href")
             if catbox_re.match(url):
                 real_name = os.path.basename(url)
-                links.append((basepath, url, real_name))
+                links.append((basepath, url, real_name, mtime))
             elif mega_re.match(url):
                 mega_links.append(url)
 
@@ -555,12 +555,13 @@ class WarosuDownloader(BaseDownloader):
         mega_links = []
         seen = {}
         for post in posts:
-            link = self.get_file_link(basepath, post)
+            mtime = int(post.find("span", class_="posttime").get("title")[:-3]) - (5 * 60 * 60) # date is in America/New_York timezone
+            link = self.get_file_link(basepath, post, mtime)
             if link and not link[1].lower() in seen:
                 links.append(link)
                 seen[link[1].lower()] = True
 
-            l, ml = self.get_post_links(basepath, post)
+            l, ml = self.get_post_links(basepath, post, mtime)
             for link in l:
                 if link and not link[1].lower() in seen:
                     links.append(link)
