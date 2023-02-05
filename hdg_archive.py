@@ -315,16 +315,22 @@ class FiveChanDownloader(BaseDownloader):
                      with open("5ch_cache.txt", "w") as f:
                         f.write("\n".join(seen.keys()))
 
-        pages = sorted(pages, key=lambda l: l[0], reverse=True)
         downloaded = {k[0]: True for k in pages}
         for link in seen.keys():
            if not link in downloaded:
               pages.append((link, None))
 
+        pages = sorted(pages, key=lambda l: l[0], reverse=True)
+
         return pages
 
     def get_thread(self, post):
        link, page = post
+
+       r = re.compile(r'liveuranus/(\d*)')
+       thread_num = r.search(link).groups(1)[0]
+       print(f"=== THREAD: {thread_num}")
+
        if page:
           return post
 
@@ -357,6 +363,7 @@ class FiveChanDownloader(BaseDownloader):
             for url in urls:
                 url = url.replace("http://jump.5ch.net/?", "")
                 real_name = os.path.basename(url)
+                print(url)
                 if catbox_re.match(url):
                     links.append((os.path.join(basepath, "catbox"), url, real_name, mtime))
                 if litterbox_re.match(url):
@@ -400,7 +407,6 @@ class EightChanDownloader(BaseDownloader):
 
     def get_thread(self, post):
         thread_num = post["threadId"]
-        print(thread_num)
 
         print(f"=== THREAD: {thread_num}")
 
@@ -729,5 +735,6 @@ while True:
 
         if args.num_threads and threads >= args.num_threads:
            print(f"Finished archiving latest {args.num_threads}.")
+           exit(0)
 
     page += 1
