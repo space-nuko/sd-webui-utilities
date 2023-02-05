@@ -41,6 +41,8 @@ parser.add_argument('--process-count', type=int, default=8, help='Number of thre
 parser.add_argument('--catbox-only', action='store_true', help='Only download catbox links')
 parser.add_argument('--images-only', action='store_true', help='Only download images and videos (no .safetensors, .zip, etc)')
 parser.add_argument('--ignore-deleted', action='store_true', help='Ignore deleted posts')
+parser.add_argument('--num-threads', '-n', type=int, default=None, help='Archive only the N most recent threads')
+
 
 args = parser.parse_args()
 
@@ -72,7 +74,8 @@ print(site)
 sitename = os.path.splitext(os.path.basename(site))[0]
 BASE_URL = site
 OUTPATH = os.path.join(passed_path, sitename, args.board)
-catbox_re = re.compile(r'^http(|s)://(files|litter).catbox.moe/.+')
+catbox_re = re.compile(r'^http(|s)://files.catbox.moe/.+')
+litterbox_re = re.compile(r'^http(|s)://litter.catbox.moe/.+')
 mega_re = re.compile(r'^http(|s)://mega(\.co|).nz/.+')
 majinai_re = re.compile(r'^http(|s)://(www.|)majinai.art/.+\.(gif|png|jpg|jpeg)')
 catbox_file_re = re.compile(r'^catbox_(.*)\.(.*)')
@@ -167,6 +170,10 @@ class FourChanDownloader(BaseDownloader):
         for url in urls:
             if catbox_re.match(url):
                 bp = os.path.join(basepath, "catbox")
+                real_name = os.path.basename(url)
+                links.append((bp, url, real_name, mtime))
+            elif litterbox_re.match(url):
+                bp = os.path.join(basepath, "litterbox")
                 real_name = os.path.basename(url)
                 links.append((bp, url, real_name, mtime))
             elif mega_re.match(url):
@@ -352,6 +359,8 @@ class FiveChanDownloader(BaseDownloader):
                 real_name = os.path.basename(url)
                 if catbox_re.match(url):
                     links.append((os.path.join(basepath, "catbox"), url, real_name, mtime))
+                if litterbox_re.match(url):
+                    links.append((os.path.join(basepath, "litterbox"), url, real_name, mtime))
                 elif mega_re.match(url):
                     mega_links.append(url)
                 elif imgur_re.match(url):
@@ -424,7 +433,6 @@ class EightChanDownloader(BaseDownloader):
 
 
     def get_post_links(self, basepath, post, mtime):
-        basepath = os.path.join(basepath, "catbox")
         message = post["message"]
         if not message:
             return [], []
@@ -437,7 +445,10 @@ class EightChanDownloader(BaseDownloader):
         for url in urls:
             if catbox_re.match(url):
                 real_name = os.path.basename(url)
-                links.append((basepath, url, real_name, mtime))
+                links.append((os.path.join(basepath, "catbox"), url, real_name, mtime))
+            elif litterbox_re.match(url):
+                real_name = os.path.basename(url)
+                links.append((os.path.join(basepath, "litterbox"), url, real_name, mtime))
             elif mega_re.match(url):
                 mega_links.append(url)
 
@@ -551,7 +562,6 @@ class WarosuDownloader(BaseDownloader):
 
 
     def get_post_links(self, basepath, post, mtime):
-        basepath = os.path.join(basepath, "catbox")
         message = post.select_one("p", itemprop="text")
         if not message:
             return [], []
@@ -563,7 +573,10 @@ class WarosuDownloader(BaseDownloader):
             url = a.get("href")
             if catbox_re.match(url):
                 real_name = os.path.basename(url)
-                links.append((basepath, url, real_name, mtime))
+                links.append((os.path.join(basepath, "catbox"), url, real_name, mtime))
+            elif litterbox_re.match(url):
+                real_name = os.path.basename(url)
+                links.append((os.path.join(basepath, "litterbox"), url, real_name, mtime))
             elif mega_re.match(url):
                 mega_links.append(url)
 
@@ -673,6 +686,9 @@ os.makedirs(OUTPATH, exist_ok=True)
 print(f"Saving files in /{downloader.name()} to {OUTPATH}...")
 
 
+threads = 0
+
+
 while True:
     print(f"*** Page {page} ***")
 
@@ -705,5 +721,10 @@ while True:
         p.close()
         p.join()
         signal.signal(signal.SIGINT, original_sigint)
+
+        threads += 1
+
+        if args.num_threads and threads >= args.num_threads:
+           print(f"Finished archiving latest {args.num_threads}.")
 
     page += 1
