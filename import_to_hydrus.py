@@ -121,7 +121,11 @@ def get_tags_from_pnginfo(image):
             to_remove.append(tag)
             if tag.startswith("addnet_model"):
                 t = re.sub(addnet_re, "", tag).strip(":")
-                name, hash = addnet_model_re.search(t).groups()
+                m = addnet_model_re.search(t)
+                if not m:
+                    print(f"COULD NOT FIND: {t}")
+                    continue
+                name, hash = m.groups()
                 t1 = f"addnet_model:{t}"
                 t2 = f"addnet_model_name:{name}"
                 t3 = f"addnet_model_hash:{hash}"
@@ -157,8 +161,6 @@ def get_tags_from_pnginfo(image):
     tags = set(tags)
     for r in to_remove:
         tags.remove(r)
-
-    print(tags)
 
     return tags
 
