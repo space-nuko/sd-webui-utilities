@@ -703,6 +703,9 @@ while True:
             continue
 
         links = downloader.extract_links(thread)
+        if not links:
+           print("!!! SKIPPING (no links)")
+           continue
 
         print(f"+++ {len(links)} links to download.")
 

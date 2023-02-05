@@ -30,16 +30,17 @@ def read_metadata(filename):
 groups = {}
 
 for filename in glob.iglob(f"{model_dir}/**/*.safetensors", recursive=True):
-    metadata = read_metadata(filename)
-    if "ss_session_id" in metadata and os.path.basename(filename).lower().__contains__(prefix):
-        session_id = metadata["ss_session_id"]
-    else:
-        session_id = filename
-    epoch = int(metadata.get("ss_epoch", 0))
-    group = groups.get(session_id, {})
-    groups[session_id] = group
+    if os.path.basename(filename).lower().__contains__(prefix):
+        metadata = read_metadata(filename)
+        if "ss_session_id" in metadata:
+            session_id = metadata["ss_session_id"]
+        else:
+            session_id = filename
+        epoch = int(metadata.get("ss_epoch", 0))
+        group = groups.get(session_id, {})
+        groups[session_id] = group
 
-    group[epoch] = filename
+        group[epoch] = filename
 
 l = []
 for session_id, group in groups.items():
