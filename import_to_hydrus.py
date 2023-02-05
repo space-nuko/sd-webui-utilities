@@ -167,6 +167,17 @@ def import_path(client, path, tags=(), recursive=True, service_names=("stable-di
     default_tags = tags
     tag_sets = collections.defaultdict(set)
 
+    def do_import(tag_sets):
+        for tags, paths in tqdm.tqdm(tag_sets.items()):
+            results = client.add_and_tag_files(paths, tags, service_names)
+            for path, result in zip(paths, results):
+                print(path + ":" + str(result))
+                if "hash" in result:
+                    client.set_notes({"filename": path}, hash_=result["hash"])
+        tag_sets.clear()
+
+    i = 0
+
     for path in tqdm.tqdm(list(yield_paths(path, valid_file_path, recursive))):
         if os.path.splitext(path)[1].lower() != ".png":
             continue
@@ -186,12 +197,10 @@ def import_path(client, path, tags=(), recursive=True, service_names=("stable-di
         tags.update(default_tags)
         tag_sets[tuple(sorted(tags))].add(os.path.realpath(path))
 
-    for tags, paths in tqdm.tqdm(tag_sets.items()):
-        results = client.add_and_tag_files(paths, tags, service_names)
-        for path, result in zip(paths, results):
-            print(path + ":" + str(result))
-            if "hash" in result:
-                client.set_notes({"filename": path}, hash_=result["hash"])
+        i += 1
+        if i >= 100:
+            do_import(tag_sets)
+            i = 0
 
 
 def main(arguments):
