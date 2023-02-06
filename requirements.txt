@@ -9,3 +9,5 @@ python-dotenv
 hydrus-api
 #dateutil
 lark
+textblob
+sacremoses

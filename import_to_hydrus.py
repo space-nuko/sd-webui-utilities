@@ -243,7 +243,7 @@ def main(arguments):
         Image.MAX_IMAGE_PIXELS = None
 
     if os.path.isfile("hydrus_import_cache.txt"):
-        with open("hydrus_import_cache.txt", "r") as f:
+        with open("hydrus_import_cache.txt", "r", encoding="utf-8") as f:
             for line in f:
                 cache.add(line.strip())
 
