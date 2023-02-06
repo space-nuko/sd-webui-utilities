@@ -46,6 +46,9 @@ argument_parser.add_argument("--api-url", "-a", default=hydrus_api.DEFAULT_API_U
 argument_parser.add_argument("--api_key", "-k", default=None)
 
 
+cache = set()
+
+
 def yield_paths(path, predicate=lambda path: path, recursive=True):
     for path, directories, file_names in os.walk(path, followlinks=True):
         if predicate(path):
@@ -61,7 +64,9 @@ def yield_paths(path, predicate=lambda path: path, recursive=True):
 
 
 def valid_file_path(path):
-    return os.path.isfile(path) or os.path.islink(path) and os.path.isfile(os.path.realpath(path))
+    global cache
+    realpath = os.path.realpath(path)
+    return realpath not in cache and os.path.isfile(path) or os.path.islink(path) and os.path.isfile(realpath)
 
 
 def get_negatives(line):
@@ -168,20 +173,37 @@ def get_tags_from_pnginfo(image):
 def import_path(client, path, tags=(), recursive=True, service_names=("stable-diffusion-webui",)):
     default_tags = tags
     tag_sets = collections.defaultdict(set)
+    parameters = {}
 
-    def do_import(tag_sets):
+    def do_import(tag_sets, parameters):
+        global cache
         for tags, paths in tqdm.tqdm(tag_sets.items()):
             results = client.add_and_tag_files(paths, tags, service_names)
             for path, result in zip(paths, results):
-                print(path + ":" + str(result))
-                if "hash" in result:
-                    client.set_notes({"filename": path}, hash_=result["hash"])
+                status = result.get("status", 4)
+
+                if status == 1 or status == 2:
+                    cache.add(path)
+                    if "hash" in result:
+                        image = Image.open(path)
+                        image.load()
+                        params = parameters[path]
+                        client.set_notes({"filename": path, "parameters": params}, hash_=result["hash"])
         tag_sets.clear()
+        parameters.clear()
+
+        with open("hydrus_import_cache.txt", "w", encoding="utf-8") as f:
+            for line in cache:
+                f.write(line + "\n")
 
     i = 0
 
     for path in tqdm.tqdm(list(yield_paths(path, valid_file_path, recursive))):
         if os.path.splitext(path)[1].lower() != ".png":
+            continue
+
+        realpath = os.path.realpath(path)
+        if realpath in cache:
             continue
 
         directory_path, filename = os.path.split(path)
@@ -197,15 +219,20 @@ def import_path(client, path, tags=(), recursive=True, service_names=("stable-di
 
         tags = get_tags_from_pnginfo(image)
         tags.update(default_tags)
-        tag_sets[tuple(sorted(tags))].add(os.path.realpath(path))
+        tag_sets[tuple(sorted(tags))].add(realpath)
+        parameters[realpath] = image.info["parameters"]
 
         i += 1
         if i >= 100:
-            do_import(tag_sets)
+            do_import(tag_sets, parameters)
             i = 0
+
+    do_import(tag_sets, parameters)
 
 
 def main(arguments):
+    global cache
+
     api_key = arguments.api_key or os.getenv("HYDRUS_ACCESS_KEY")
     client = hydrus_api.Client(api_key, arguments.api_url)
     if not hydrus_api.utils.verify_permissions(client, REQUIRED_PERMISSIONS):
@@ -214,6 +241,11 @@ def main(arguments):
 
     if not arguments.protect_decompression:
         Image.MAX_IMAGE_PIXELS = None
+
+    if os.path.isfile("hydrus_import_cache.txt"):
+        with open("hydrus_import_cache.txt", "r") as f:
+            for line in f:
+                cache.add(line.strip())
 
     for path in arguments.paths:
         print(f"Importing {path}...")
@@ -224,6 +256,10 @@ def main(arguments):
             arguments.recursive,
             arguments.services,
         )
+
+    with open("hydrus_import_cache.txt", "w", encoding="utf-8") as f:
+        for line in cache:
+            f.write(line + "\n")
 
 
 if __name__ == "__main__":
