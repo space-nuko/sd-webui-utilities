@@ -132,6 +132,12 @@ class FourChanDownloader(BaseDownloader):
         resp = requests.get(BASE_URL + "/_/api/chan/thread/", params={"board": args.board, "num": thread_num}, headers=self.headers)
         thread = resp.json()
 
+        basepath = os.path.join(OUTPATH, thread_num)
+        os.makedirs(basepath, exist_ok=True)
+        if resp.status_code == 200:
+           with open(os.path.join(basepath, "thread.json"), "w", encoding="utf-8") as f:
+              f.write(resp.text)
+
         if thread_num not in thread:
             print(f"!!! SKIP THREAD (not found): {thread_num}")
             return None
@@ -331,11 +337,17 @@ class FiveChanDownloader(BaseDownloader):
        thread_num = r.search(link).groups(1)[0]
        print(f"=== THREAD: {thread_num}")
 
-       if page:
-          return post
+       if not page:
+           resp = requests.get(link, headers=self.headers)
+           if resp.status_code == 200:
+               page = BeautifulSoup(resp.text, features="html5lib")
 
-       resp = requests.get(link, headers=self.headers)
-       page = BeautifulSoup(resp.text, features="html5lib")
+       basepath = os.path.join(OUTPATH, thread_num)
+       os.makedirs(basepath, exist_ok=True)
+       if page:
+          with open(os.path.join(basepath, "thread.html"), "w", encoding="utf-8") as f:
+             f.write(str(page))
+
        return (link, page)
 
     def extract_links(self, thread):
@@ -412,6 +424,12 @@ class EightChanDownloader(BaseDownloader):
 
         resp = requests.get(f"{BASE_URL}/{self.board}/res/{thread_num}.json", headers=self.headers)
         thread = resp.json()
+
+        basepath = os.path.join(OUTPATH, str(thread_num))
+        os.makedirs(basepath, exist_ok=True)
+        if resp.status_code == 200:
+           with open(os.path.join(basepath, "thread.json"), "w", encoding="utf-8") as f:
+              f.write(resp.text)
 
         if "posts" not in thread:
             print(f"!!! SKIP THREAD (not found): {thread_num}")
@@ -537,6 +555,12 @@ class WarosuDownloader(BaseDownloader):
         print(f"=== THREAD: {thread_num}")
 
         resp = requests.get(f"{BASE_URL}/{self.board}/thread/S{thread_num}", headers=self.headers)
+
+        basepath = os.path.join(OUTPATH, str(thread_num))
+        os.makedirs(basepath, exist_ok=True)
+        if resp.status_code == 200:
+           with open(os.path.join(basepath, "thread.html"), "w", encoding="utf-8") as f:
+              f.write(resp.text)
 
         return BeautifulSoup(resp.text, features="html5lib")
 
