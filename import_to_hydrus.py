@@ -66,7 +66,7 @@ def yield_paths(path, predicate=lambda path: path, recursive=True):
 def valid_file_path(path):
     global cache
     realpath = os.path.realpath(path)
-    return realpath not in cache and os.path.isfile(path) or os.path.islink(path) and os.path.isfile(realpath)
+    return realpath not in cache and os.path.isfile(path) or os.path.islink(path) and os.path.isfile(realpath) and realpath.endswith(".png")
 
 
 def get_negatives(line):
