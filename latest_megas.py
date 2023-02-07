@@ -22,7 +22,8 @@ for site in os.listdir(args.path):
     for board in os.listdir(bp):
         bp2 = os.path.join(bp, board)
         i = 0
-        for thread in os.listdir(bp2):
+        threads = sorted(os.listdir(bp2), key=int, reverse=True)
+        for thread in threads:
             mega = os.path.join(bp2, thread, "mega.txt")
             if os.path.isfile(mega):
                 txts.append(mega)
@@ -31,7 +32,7 @@ for site in os.listdir(args.path):
                     break
 
 
-folder_re = re.compile(r'^(http.*/folder/.*)/folder/.*') # strip mega subfolders
+folder_re = re.compile(r'^(http.*/folder/.*)/(folder|file)/.*') # strip mega subfolders
 links = set()
 
 
@@ -42,7 +43,6 @@ for txt in txts:
             m = folder_re.search(line)
             if m:
                 line = m.group(1)
-                print(line)
             links.add(line.strip())
 
 
