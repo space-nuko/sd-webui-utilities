@@ -50,7 +50,9 @@ args = parser.parse_args()
 sites = {
     "https://desuarchive.org": ["a", "aco", "an", "c", "cgl", "co", "d", "fit", "g", "his", "int", "k", "m", "mlp", "mu", "q", "qa", "r9k", "tg", "trash", "vr", "wsg"],
     "https://archiveofsins.com": ["h", "hc", "hm", "i", "lgbt", "r", "s", "soc", "t", "u"],
-    "https://warosu.org": ["vt"],  # archived.moe disables search on /vt/ so we must grudgingly scrape warosu.org, which doesn't have an API
+#   "https://warosu.org": ["vt"],
+    "https://archive.palanq.win": ["vt", "e"],
+    "https://8chan.moe": ["hdg"],
     "https://8chan.moe": ["hdg"],
     "https://fate.5ch.net": ["liveuranus"]
 }
@@ -105,9 +107,9 @@ class BaseDownloader():
         pass
 
 
-class FourChanDownloader(BaseDownloader):
+class FoolFuukaDownloader(BaseDownloader):
     def __init__(self, site, board):
-       super(FourChanDownloader, self).__init__(site, board)
+       super(FoolFuukaDownloader, self).__init__(site, board)
 
     def name(self):
         return f"{self.site}/{self.board}"
@@ -119,7 +121,7 @@ class FourChanDownloader(BaseDownloader):
         if "0" not in result:
             return None
 
-        posts = filter(lambda p: p["op"] == "1", result["0"]["posts"])
+        posts = filter(lambda p: p["op"] == "1" and p["board"]["shortname"] == args.board, result["0"]["posts"])
         return posts
 
     def get_thread(self, post):
@@ -709,7 +711,7 @@ elif site == "https://8chan.moe":
 elif site == "https://warosu.org":
    downloader = WarosuDownloader(site, args.board)
 else:
-   downloader = FourChanDownloader(site, args.board)
+   downloader = FoolFuukaDownloader(site, args.board)
 
 
 os.makedirs(OUTPATH, exist_ok=True)
