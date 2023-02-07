@@ -42,6 +42,7 @@ parser.add_argument('--catbox-only', action='store_true', help='Only download ca
 parser.add_argument('--images-only', action='store_true', help='Only download images and videos (no .safetensors, .zip, etc)')
 parser.add_argument('--ignore-deleted', action='store_true', help='Ignore deleted posts')
 parser.add_argument('--num-threads', '-n', type=int, default=None, help='Archive only the N most recent threads')
+parser.add_argument('--sanitize-filepaths', action='store_true', help='Strip non-ASCII characters from filepaths')
 
 
 args = parser.parse_args()
@@ -135,14 +136,15 @@ class FoolFuukaDownloader(BaseDownloader):
         thread = resp.json()
 
         basepath = os.path.join(OUTPATH, thread_num)
-        os.makedirs(basepath, exist_ok=True)
-        if resp.status_code == 200:
-           with open(os.path.join(basepath, "thread.json"), "w", encoding="utf-8") as f:
-              f.write(resp.text)
 
         if thread_num not in thread:
             print(f"!!! SKIP THREAD (not found): {thread_num}")
             return None
+
+        if resp.status_code == 200:
+           os.makedirs(basepath, exist_ok=True)
+           with open(os.path.join(basepath, "thread.json"), "w", encoding="utf-8") as f:
+              f.write(resp.text)
 
         return thread[thread_num]
 
@@ -429,13 +431,14 @@ class EightChanDownloader(BaseDownloader):
 
         basepath = os.path.join(OUTPATH, str(thread_num))
         os.makedirs(basepath, exist_ok=True)
-        if resp.status_code == 200:
-           with open(os.path.join(basepath, "thread.json"), "w", encoding="utf-8") as f:
-              f.write(resp.text)
 
         if "posts" not in thread:
             print(f"!!! SKIP THREAD (not found): {thread_num}")
             return None
+
+        if resp.status_code == 200:
+           with open(os.path.join(basepath, "thread.json"), "w", encoding="utf-8") as f:
+              f.write(resp.text)
 
         return thread
 
@@ -655,6 +658,17 @@ class WarosuDownloader(BaseDownloader):
         return self._extract_links(basepath, posts)
 
 
+def extra_sanitize_filepath(path):
+    if len(path) >= 259:
+        p, e = os.path.splitext(path)
+        p = p[:250]
+        path = f"{p}{e}"
+    if args.sanitize_filepaths:  # strip out emoji and other non-ASCII characters
+       path = path.encode("ascii", errors="replace").decode("utf-8").replace("?", "_")
+    path = sanitize_filepath(path, platform="Windows")
+    return path
+
+
 def save_link(basepath, url, real_name, mtime):
     global g_run_loops
     if not g_run_loops:
@@ -666,11 +680,7 @@ def save_link(basepath, url, real_name, mtime):
             return
 
     path = os.path.join(basepath, real_name)
-    if len(path) >= 259:
-        p, e = os.path.splitext(path)
-        p = p[:250]
-        path = f"{p}{e}"
-    path = sanitize_filepath(path, platform="Windows")
+    path = extra_sanitize_filepath(path)
 
     if os.path.isfile(path):
         print(f"--- SKIPPING (file exists): {path}")
