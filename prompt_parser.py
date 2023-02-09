@@ -211,51 +211,51 @@ def get_multicond_learned_conditioning(model, prompts, steps) -> MulticondLearne
     return MulticondLearnedConditioning(shape=(len(prompts),), batch=res)
 
 
-def reconstruct_cond_batch(c: List[List[ScheduledPromptConditioning]], current_step):
-    param = c[0][0].cond
-    res = torch.zeros((len(c),) + param.shape, device=param.device, dtype=param.dtype)
-    for i, cond_schedule in enumerate(c):
-        target_index = 0
-        for current, (end_at, cond) in enumerate(cond_schedule):
-            if current_step <= end_at:
-                target_index = current
-                break
-        res[i] = cond_schedule[target_index].cond
-
-    return res
-
-
-def reconstruct_multicond_batch(c: MulticondLearnedConditioning, current_step):
-    param = c.batch[0][0].schedules[0].cond
-
-    tensors = []
-    conds_list = []
-
-    for batch_no, composable_prompts in enumerate(c.batch):
-        conds_for_batch = []
-
-        for cond_index, composable_prompt in enumerate(composable_prompts):
-            target_index = 0
-            for current, (end_at, cond) in enumerate(composable_prompt.schedules):
-                if current_step <= end_at:
-                    target_index = current
-                    break
-
-            conds_for_batch.append((len(tensors), composable_prompt.weight))
-            tensors.append(composable_prompt.schedules[target_index].cond)
-
-        conds_list.append(conds_for_batch)
-
-    # if prompts have wildly different lengths above the limit we'll get tensors fo different shapes
-    # and won't be able to torch.stack them. So this fixes that.
-    token_count = max([x.shape[0] for x in tensors])
-    for i in range(len(tensors)):
-        if tensors[i].shape[0] != token_count:
-            last_vector = tensors[i][-1:]
-            last_vector_repeated = last_vector.repeat([token_count - tensors[i].shape[0], 1])
-            tensors[i] = torch.vstack([tensors[i], last_vector_repeated])
-
-    return conds_list, torch.stack(tensors).to(device=param.device, dtype=param.dtype)
+#def reconstruct_cond_batch(c: List[List[ScheduledPromptConditioning]], current_step):
+#    param = c[0][0].cond
+#    res = torch.zeros((len(c),) + param.shape, device=param.device, dtype=param.dtype)
+#    for i, cond_schedule in enumerate(c):
+#        target_index = 0
+#        for current, (end_at, cond) in enumerate(cond_schedule):
+#            if current_step <= end_at:
+#                target_index = current
+#                break
+#        res[i] = cond_schedule[target_index].cond
+#
+#    return res
+#
+#
+#def reconstruct_multicond_batch(c: MulticondLearnedConditioning, current_step):
+#    param = c.batch[0][0].schedules[0].cond
+#
+#    tensors = []
+#    conds_list = []
+#
+#    for batch_no, composable_prompts in enumerate(c.batch):
+#        conds_for_batch = []
+#
+#        for cond_index, composable_prompt in enumerate(composable_prompts):
+#            target_index = 0
+#            for current, (end_at, cond) in enumerate(composable_prompt.schedules):
+#                if current_step <= end_at:
+#                    target_index = current
+#                    break
+#
+#            conds_for_batch.append((len(tensors), composable_prompt.weight))
+#            tensors.append(composable_prompt.schedules[target_index].cond)
+#
+#        conds_list.append(conds_for_batch)
+#
+#    # if prompts have wildly different lengths above the limit we'll get tensors fo different shapes
+#    # and won't be able to torch.stack them. So this fixes that.
+#    token_count = max([x.shape[0] for x in tensors])
+#    for i in range(len(tensors)):
+#        if tensors[i].shape[0] != token_count:
+#            last_vector = tensors[i][-1:]
+#            last_vector_repeated = last_vector.repeat([token_count - tensors[i].shape[0], 1])
+#            tensors[i] = torch.vstack([tensors[i], last_vector_repeated])
+#
+#    return conds_list, torch.stack(tensors).to(device=param.device, dtype=param.dtype)
 
 
 re_attention = re.compile(r"""
@@ -369,5 +369,5 @@ def parse_prompt_attention(text):
 if __name__ == "__main__":
     import doctest
     doctest.testmod(optionflags=doctest.NORMALIZE_WHITESPACE)
-else:
-    import torch  # doctest faster
+#else:
+#    import torch  # doctest faster
