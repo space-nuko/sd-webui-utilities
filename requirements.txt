@@ -11,3 +11,5 @@ hydrus-api
 lark
 textblob
 sacremoses
+html2text
+Pillow
