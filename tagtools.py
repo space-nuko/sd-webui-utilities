@@ -52,6 +52,9 @@ parser_move_tags_to_front.add_argument('tags', type=str, nargs='+', help='Tags t
 parser_validate = subparsers.add_parser('validate', help='Validate a dataset')
 parser_validate.add_argument('path', type=str, help='Path to caption files')
 
+parser_stats = subparsers.add_parser('stats', help='Show dataset image counts/repeats')
+parser_stats.add_argument('path', type=str, help='Path to caption files')
+
 parser_organize_images = subparsers.add_parser('organize_images', help='Move images with specified tags (delimited by commas) into a subfolder')
 parser_organize_images.add_argument('path', type=str, help='Path to caption files')
 parser_organize_images.add_argument('tags', type=str, nargs='+', help='Tags to move')
@@ -63,6 +66,7 @@ args = parser.parse_args()
 
 gallery_dl_txt_re = re.compile(r'^(.*)\.[a-z]{3}\.txt')
 IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif"]
+repeats_folder_re = re.compile(r'^(\d+)_(.*)$')
 
 
 def convert_tag(t):
@@ -274,6 +278,18 @@ def validate(args):
     problems = []
     total = 0
 
+    print("Validating folder names...")
+    for dirname in tqdm.tqdm(os.listdir(args.path)):
+        path = os.path.join(args.path, dirname)
+        if os.path.isdir(path):
+            m = repeats_folder_re.match(dirname)
+            if not m:
+                problems.add((path, "Folder is not in \"5_concept\" format"))
+                continue
+            img_count = len(list(glob.iglob(os.path.join(path, "*.txt"))))
+            if img_count == 0:
+                problems.add((path, "Folder contains no captions"))
+
     print("Validating image files...")
     for ext in IMAGE_EXTS:
         for img in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, f"**/*{ext}"), recursive=True))):
@@ -325,6 +341,35 @@ def validate(args):
     print(f"No problems found for {total} image/caption pairs.")
     return 0
 
+
+def stats(args):
+    problems = []
+    total_images = 0
+    total_seen = 0
+
+    rows = [["folder name", "repeats", "image count", "total seen"]]
+
+    for dirname in os.listdir(args.path):
+        path = os.path.join(args.path, dirname)
+        if os.path.isdir(path):
+            m = repeats_folder_re.match(dirname)
+            repeats, folder_name = int(m.group(1)), m.group(2)
+            img_count = len(list(glob.iglob(os.path.join(path, "*.txt"))))
+            rows.append([dirname, repeats, img_count, repeats * img_count])
+            total_images += img_count
+            total_seen += img_count * repeats
+
+    rows.append(["(Total)", "", total_images, total_seen])
+
+    col_width = max(len(str(word)) for row in rows for word in row) + 2
+    for i, row in enumerate(rows):
+        print("".join(str(word).ljust(col_width) for word in row))
+        if i == 0:
+            print(("=" * (col_width - 1) + " ") * len(rows[0]))
+        elif i == len(rows) - 2:
+            print(("-" * (col_width - 1) + " ") * len(rows[0]))
+
+
 def main(args):
     if args.command == "fixup":
         return fixup(args)
@@ -340,6 +385,8 @@ def main(args):
         return organize_images(args)
     elif args.command == "validate":
         return validate(args)
+    elif args.command == "stats":
+        return stats(args)
     else:
         parser.print_help()
         return 1
