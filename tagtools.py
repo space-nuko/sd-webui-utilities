@@ -50,7 +50,7 @@ parser_move_tags_to_front.add_argument('path', type=str, help='Path to caption f
 parser_move_tags_to_front.add_argument('tags', type=str, nargs='+', help='Tags to move')
 
 parser_validate = subparsers.add_parser('validate', help='Validate a dataset')
-parser_validate.add_argument('path', type=str, help='Path to caption files')
+parser_validate.add_argument('path', type=str, help='Path to root of dataset folder')
 
 parser_stats = subparsers.add_parser('stats', help='Show dataset image counts/repeats')
 parser_stats.add_argument('path', type=str, help='Path to caption files')
@@ -240,8 +240,8 @@ def organize_images(args):
 
     if args.split_rest:
         split_path = os.path.join(args.path, "(rest)")
-        if os.path.exists(outpath):
-            print(f"Error: Folder already exists - {outpath}")
+        if os.path.exists(split_path):
+            print(f"Error: Folder already exists - {split_path}")
             return 1
 
     modified = 0
