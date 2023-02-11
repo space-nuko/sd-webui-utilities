@@ -332,6 +332,8 @@ def validate(args):
         tags = {t.strip().lower(): True for t in tag_string.split(",")}
         if not tags:
             problems.append((txt, "Caption file has no tags"))
+        elif any(not t for t in tags.keys()):
+            problems.append((txt, "Caption file contains at least one blank tag"))
 
     if problems:
         for filename, problem in problems:
