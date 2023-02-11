@@ -21,7 +21,7 @@ def worker(link):
     for img in produkt_gallery.find_all("img", itemprop="image"):
         url = "https:" + img.get("src")
         heading = page.find(itemprop="name").text
-        path = sanitize_filepath("./Figma/" + heading.replace("/", "-") + "/" + os.path.basename(url))
+        path = sanitize_filepath("D:/media/figure/" + heading.replace("/", "-") + "/" + os.path.basename(url), platform="Windows")
         print(url)
         print(path)
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -43,10 +43,13 @@ def worker(link):
             f.write(txt)
 
 
+BASE_URL = "https://www.goodsmile.info/en/products/category/scale/"
+
+
 no = 1
 while True:
     print(f"=== Page {no} ===")
-    resp = requests.get(f"https://www.goodsmile.info/en/products/category/figma/page/{no}")
+    resp = requests.get(f"{BASE_URL}/page/{no}")
 
     page = BeautifulSoup(resp.text, features="html5lib")
     produkts = page.find(class_="hitList")

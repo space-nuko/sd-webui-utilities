@@ -27,10 +27,16 @@ if not files:
     exit(1)
 
 txt = StringIO()
-for file in files:
+while files:
+    file = files.pop()
     if os.path.isfile(file):
         with open(file, "r", encoding="utf-8") as f:
             txt.write(f.read())
+    elif os.path.isdir(file):
+        for n in os.listdir(file):
+            p = os.path.join(file, n)
+            if os.path.isfile(p):
+                files.append(p)
     else:
         raise Exception(f"File not found: {file}")
 
@@ -42,11 +48,16 @@ blob = TextBlob(raw)
 phrases = blob.noun_phrases
 
 counter = Counter([p.strip() for p in phrases])
-print(counter)
+#print(counter)
 
+strip = set(["ive", "im", "id", "yeah", "ill", "op", "thats", "dont", "theres", "hes", "shes", "well"])
 prompt = ""
+
 i = 0
-for noun, frequency in counter.items():
+for noun, frequency in counter.most_common():
+    if noun in strip:
+        continue
+
     prompt += noun + ", "
     i += 1
     if i > 30:

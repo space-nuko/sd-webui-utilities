@@ -42,7 +42,7 @@ parser.add_argument('--catbox-only', action='store_true', help='Only download ca
 parser.add_argument('--images-only', action='store_true', help='Only download images and videos (no .safetensors, .zip, etc)')
 parser.add_argument('--ignore-deleted', action='store_true', help='Ignore deleted posts')
 parser.add_argument('--num-threads', '-n', type=int, default=None, help='Archive only the N most recent threads')
-parser.add_argument('--sanitize-filepaths', action='store_true', help='Strip non-ASCII characters from filepaths')
+parser.add_argument('--sanitize-filepaths', action='store_true', help='Strip non-ASCII characters from output filepaths')
 
 
 args = parser.parse_args()
@@ -53,7 +53,6 @@ sites = {
     "https://archiveofsins.com": ["h", "hc", "hm", "i", "lgbt", "r", "s", "soc", "t", "u"],
 #   "https://warosu.org": ["vt"],
     "https://archive.palanq.win": ["vt", "e"],
-    "https://8chan.moe": ["hdg"],
     "https://8chan.moe": ["hdg"],
     "https://fate.5ch.net": ["liveuranus"]
 }
