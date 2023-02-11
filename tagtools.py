@@ -49,6 +49,9 @@ parser_move_tags_to_front = subparsers.add_parser('move_to_front', help='Move ta
 parser_move_tags_to_front.add_argument('path', type=str, help='Path to caption files')
 parser_move_tags_to_front.add_argument('tags', type=str, nargs='+', help='Tags to move')
 
+parser_validate = subparsers.add_parser('validate', help='Validate a dataset')
+parser_validate.add_argument('path', type=str, help='Path to caption files')
+
 parser_organize_images = subparsers.add_parser('organize_images', help='Move images with specified tags (delimited by commas) into a subfolder')
 parser_organize_images.add_argument('path', type=str, help='Path to caption files')
 parser_organize_images.add_argument('tags', type=str, nargs='+', help='Tags to move')
@@ -75,11 +78,21 @@ def get_caption_file_image(txt):
     return None
 
 
+def get_caption_file_images(txt):
+    basename = os.path.splitext(txt)[0]
+    images = []
+    for ext in IMAGE_EXTS:
+        path = basename + ext
+        if os.path.isfile(path):
+            images.append(path)
+    return images
+
+
 def fixup(args):
     # rename gallery-dl-format .txt files (<...>.png.txt, etc.)
     renamed = 0
     total = 0
-    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "*.txt"), recursive=args.recursive))):
+    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=args.recursive))):
         m = gallery_dl_txt_re.match(txt)
         if m:
             basename = m.groups(1)[0]
@@ -93,7 +106,7 @@ def fixup(args):
     mpn = MosesPunctNormalizer()
 
     # join newlines, deduplicate tags, fix unicode chars, remove spaces and escape parens
-    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "*.txt"), recursive=args.recursive))):
+    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=args.recursive))):
         if get_caption_file_image(txt):
             with open(txt, "r", encoding="utf-8") as f:
                 s = f.read()
@@ -115,7 +128,7 @@ def add(args):
     tags = [convert_tag(t) for t in args.tags]
     modified = 0
     total = 0
-    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "*.txt"), recursive=args.recursive))):
+    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=args.recursive))):
         found = False
         if get_caption_file_image(txt):
             with open(txt, "r") as f:
@@ -140,7 +153,7 @@ def remove(args):
     tags = [convert_tag(t) for t in args.tags]
     modified = 0
     total = 0
-    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "*.txt"), recursive=args.recursive))):
+    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=args.recursive))):
         found = False
         if get_caption_file_image(txt):
             with open(txt, "r") as f:
@@ -167,7 +180,7 @@ def replace(args):
     to_replace = convert_tag(args.to_replace)
     modified = 0
     total = 0
-    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "*.txt"), recursive=args.recursive))):
+    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=args.recursive))):
         if get_caption_file_image(txt):
             with open(txt, "r") as f:
                 these_tags = [t.strip().lower() for t in f.read().split(",")]
@@ -192,7 +205,7 @@ def move_to_front(args):
     tags = list(reversed([convert_tag(t) for t in args.tags]))
     modified = 0
     total = 0
-    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "*.txt"), recursive=args.recursive))):
+    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=args.recursive))):
         found = False
         if get_caption_file_image(txt):
             with open(txt, "r") as f:
@@ -240,7 +253,7 @@ def organize_images(args):
         shutil.move(txt, out_txt)
         shutil.move(img, out_img)
 
-    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "*.txt"), recursive=args.recursive))):
+    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=args.recursive))):
         img = get_caption_file_image(txt)
         if img:
             with open(txt, "r", encoding="utf-8") as f:
@@ -257,6 +270,61 @@ def organize_images(args):
     print(f"Moved {modified}/{total} images and caption files to {outpath}.")
 
 
+def validate(args):
+    problems = []
+    total = 0
+
+    print("Validating image files...")
+    for ext in IMAGE_EXTS:
+        for img in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, f"**/*{ext}"), recursive=True))):
+            txt = os.path.splitext(img)[0] + ".txt"
+            if not os.path.isfile(txt):
+                problems.add((img, "Image file is missing caption"))
+
+            try:
+                pil = Image.open(img)
+                pil.load()
+            except Exception as ex:
+                problems.append((img, f"Failed to open image file: {ex}"))
+                continue
+
+    print("Validating captions...")
+    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=True))):
+        total += 1
+        found = False
+
+        images = get_caption_file_images(txt)
+        if not images:
+            problems.append((txt, "Caption file is missing corresponding image"))
+            continue
+        elif len(images) > 1:
+            problems.append((txt, "Caption file has more than one corresponding image"))
+            continue
+
+        with open(txt, "r") as f:
+            tag_string = f.read().strip()
+
+        if not tag_string:
+            problems.append((txt, "Caption file is empty"))
+            continue
+
+        if "\n" in tag_string:
+            problems.append((txt, "Caption file contains newlines"))
+        if "_" in tag_string:
+            problems.append((txt, "Caption file contains underscores"))
+
+        tags = {t.strip().lower(): True for t in tag_string.split(",")}
+        if not tags:
+            problems.append((txt, "Caption file has no tags"))
+
+    if problems:
+        for filename, problem in problems:
+            print(f"{filename} - {problem}")
+        return 1
+
+    print(f"No problems found for {total} image/caption pairs.")
+    return 0
+
 def main(args):
     if args.command == "fixup":
         return fixup(args)
@@ -270,6 +338,8 @@ def main(args):
         return move_to_front(args)
     elif args.command == "organize_images":
         return organize_images(args)
+    elif args.command == "validate":
+        return validate(args)
     else:
         parser.print_help()
         return 1
