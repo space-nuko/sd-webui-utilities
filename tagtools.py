@@ -23,6 +23,8 @@ from sacremoses import MosesPunctNormalizer
 import unicodedata
 import re
 import shutil
+import requests
+import pandas
 
 
 parser = argparse.ArgumentParser()
@@ -48,6 +50,10 @@ parser_replace_tag.add_argument('to_replace', type=str, help='Tag to replace wit
 parser_move_tags_to_front = subparsers.add_parser('move_to_front', help='Move tags in captions (delimited by commas) to front of list')
 parser_move_tags_to_front.add_argument('path', type=str, help='Path to caption files')
 parser_move_tags_to_front.add_argument('tags', type=str, nargs='+', help='Tags to move')
+
+parser_move_categories_to_front = subparsers.add_parser('move_categories_to_front', help='Move tag categories in captions (delimited by commas) to front of list')
+parser_move_categories_to_front.add_argument('path', type=str, help='Path to caption files')
+parser_move_categories_to_front.add_argument('categories', type=str, nargs='+', help='Categories to move')
 
 parser_validate = subparsers.add_parser('validate', help='Validate a dataset')
 parser_validate.add_argument('path', type=str, help='Path to root of dataset folder')
@@ -230,6 +236,60 @@ def move_to_front(args):
     print(f"Updated {modified}/{total} caption files.")
 
 
+CATEGORIES = {
+    "general": 0,
+    "artist": 1,
+    "copyright": 3,
+    "character": 4,
+    "meta": 5,
+}
+
+
+def to_danbooru_tag(t):
+    return t.strip().lower().replace(" ", "_").replace("\(", "(").replace("\)", ")")
+
+
+def move_categories_to_front(args):
+    if not os.path.isfile("danbooru.csv"):
+        print("Downloading danbooru.csv tags list...")
+        url = "https://github.com/arenatemp/sd-tagging-helper/raw/master/danbooru.csv"
+        response = requests.get(url, stream=True)
+        with open("danbooru.csv", "wb") as handle:
+            for data in tqdm.tqdm(response.iter_content()):
+                handle.write(data)
+
+    print("Loading danbooru.csv tags list...")
+    danbooru_tags = pandas.read_csv("danbooru.csv", engine="pyarrow").set_axis(["tag", "tag_category"], axis=1).set_index("tag").to_dict("index")
+    order = [CATEGORIES[cat] for cat in reversed(args.categories)]
+    print("Done.")
+
+    modified = 0
+    total = 0
+    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=args.recursive))):
+        found = False
+        if get_caption_file_image(txt):
+            with open(txt, "r") as f:
+                these_tags = [to_danbooru_tag(t) for t in f.read().split(",")]
+
+            for tag_category in order:
+                for t in these_tags:
+                    this_category = danbooru_tags.get(t)
+                    if this_category is not None:
+                        this_category = this_category["tag_category"]
+                        if tag_category == this_category:
+                            found = True
+                            these_tags.insert(0, these_tags.pop(these_tags.index(t)))
+
+            with open(txt, "w") as f:
+                f.write(", ".join(these_tags))
+
+            if found:
+                modified += 1
+            total += 1
+
+    print(f"Updated {modified}/{total} caption files.")
+
+
 def organize_images(args):
     tags = [convert_tag(t) for t in args.tags]
     folder_name = args.folder_name or " ".join(args.tags)
@@ -307,7 +367,6 @@ def validate(args):
     print("Validating captions...")
     for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=True))):
         total += 1
-        found = False
 
         images = get_caption_file_images(txt)
         if not images:
@@ -383,6 +442,8 @@ def main(args):
         return replace(args)
     elif args.command == "move_to_front":
         return move_to_front(args)
+    elif args.command == "move_categories_to_front":
+        return move_categories_to_front(args)
     elif args.command == "organize_images":
         return organize_images(args)
     elif args.command == "validate":

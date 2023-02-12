@@ -13,3 +13,5 @@ textblob
 sacremoses
 html2text
 Pillow
+pandas
+pyarrow
