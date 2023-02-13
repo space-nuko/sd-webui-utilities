@@ -55,6 +55,10 @@ parser_move_categories_to_front = subparsers.add_parser('move_categories_to_fron
 parser_move_categories_to_front.add_argument('path', type=str, help='Path to caption files')
 parser_move_categories_to_front.add_argument('categories', type=str, nargs='+', help='Categories to move')
 
+parser_strip_tag_suffix = subparsers.add_parser('strip_suffix', help='Strips a suffix from a tag ("neptune_(neptune_series)" -> "neptune")')
+parser_strip_tag_suffix.add_argument('path', type=str, help='Path to caption files')
+parser_strip_tag_suffix.add_argument('suffix', type=str, help='Suffix to find')
+
 parser_validate = subparsers.add_parser('validate', help='Validate a dataset')
 parser_validate.add_argument('path', type=str, help='Path to root of dataset folder')
 
@@ -211,6 +215,36 @@ def replace(args):
     print(f"Updated {modified}/{total} caption files.")
 
 
+def strip_suffix(args):
+    suffix = convert_tag(args.suffix)
+    modified = 0
+    total = 0
+    stripped_tags = 0
+    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=args.recursive))):
+        found = False
+        if get_caption_file_image(txt):
+            with open(txt, "r") as f:
+                these_tags = [t.strip().lower() for t in f.read().split(",")]
+
+            new_tags = []
+            for t in these_tags:
+                if t.endswith(suffix):
+                    found = True
+                    t = t.removesuffix(suffix).strip()
+                    stripped_tags += 1
+                new_tags.append(t)
+
+            with open(txt, "w") as f:
+                f.write(", ".join(new_tags))
+
+            if found:
+                modified += 1
+
+        total += 1
+
+    print(f"Updated {modified}/{total} caption files, {stripped_tags} tags stripped.")
+
+
 def move_to_front(args):
     tags = list(reversed([convert_tag(t) for t in args.tags]))
     modified = 0
@@ -269,7 +303,7 @@ def move_categories_to_front(args):
         found = False
         if get_caption_file_image(txt):
             with open(txt, "r") as f:
-                these_tags = [to_danbooru_tag(t) for t in f.read().split(",")]
+                these_tags = list(sorted(to_danbooru_tag(t) for t in f.read().split(",")))
 
             for tag_category in order:
                 for t in these_tags:
@@ -279,6 +313,8 @@ def move_categories_to_front(args):
                         if tag_category == this_category:
                             found = True
                             these_tags.insert(0, these_tags.pop(these_tags.index(t)))
+
+            these_tags = [convert_tag(t) for t in these_tags]
 
             with open(txt, "w") as f:
                 f.write(", ".join(these_tags))
@@ -294,15 +330,15 @@ def organize_images(args):
     tags = [convert_tag(t) for t in args.tags]
     folder_name = args.folder_name or " ".join(args.tags)
     outpath = os.path.join(args.path, folder_name)
-    if os.path.exists(outpath):
-        print(f"Error: Folder already exists - {outpath}")
-        return 1
+    # if os.path.exists(outpath):
+    #     print(f"Error: Folder already exists - {outpath}")
+    #     return 1
 
     if args.split_rest:
         split_path = os.path.join(args.path, "(rest)")
-        if os.path.exists(split_path):
-            print(f"Error: Folder already exists - {split_path}")
-            return 1
+        # if os.path.exists(split_path):
+        #     print(f"Error: Folder already exists - {split_path}")
+        #     return 1
 
     modified = 0
     total = 0
@@ -440,6 +476,8 @@ def main(args):
         return remove(args)
     elif args.command == "replace":
         return replace(args)
+    elif args.command == "strip_suffix":
+        return strip_suffix(args)
     elif args.command == "move_to_front":
         return move_to_front(args)
     elif args.command == "move_categories_to_front":
