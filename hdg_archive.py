@@ -17,6 +17,7 @@ import os
 import os.path
 import re
 import mimetypes
+import platform
 from datetime import datetime
 import dateutil.parser
 from bs4 import BeautifulSoup
@@ -664,7 +665,7 @@ def extra_sanitize_filepath(path):
         path = f"{p}{e}"
     if args.sanitize_filepaths:  # strip out emoji and other non-ASCII characters
        path = path.encode("ascii", errors="replace").decode("utf-8").replace("?", "_")
-    path = sanitize_filepath(path, platform="Windows")
+    path = sanitize_filepath(path, platform=platform.system())
     return path
 
 
