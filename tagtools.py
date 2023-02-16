@@ -51,7 +51,7 @@ parser_move_tags_to_front = subparsers.add_parser('move_to_front', help='Move ta
 parser_move_tags_to_front.add_argument('path', type=str, help='Path to caption files')
 parser_move_tags_to_front.add_argument('tags', type=str, nargs='+', help='Tags to move')
 
-parser_move_categories_to_front = subparsers.add_parser('move_categories_to_front', help='Move tag categories in captions (delimited by commas) to front of list')
+parser_move_categories_to_front = subparsers.add_parser('move_categories_to_front', help='Move danbooru tag categories in captions (delimited by commas) to front of list')
 parser_move_categories_to_front.add_argument('path', type=str, help='Path to caption files')
 parser_move_categories_to_front.add_argument('categories', type=str, nargs='+', help='Categories to move')
 
@@ -145,7 +145,7 @@ def add(args):
     for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**.txt"), recursive=args.recursive))):
         found = False
         if get_caption_file_image(txt):
-            with open(txt, "r") as f:
+            with open(txt, "r", encoding="utf-8") as f:
                 these_tags = [t.strip().lower() for t in f.read().split(",")]
 
             for to_add in tags:
@@ -153,7 +153,7 @@ def add(args):
                     found = True
                     these_tags.append(to_add)
 
-            with open(txt, "w") as f:
+            with open(txt, "w", encoding="utf-8") as f:
                 f.write(", ".join(these_tags))
 
             if found:
@@ -170,7 +170,7 @@ def remove(args):
     for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**.txt"), recursive=args.recursive))):
         found = False
         if get_caption_file_image(txt):
-            with open(txt, "r") as f:
+            with open(txt, "r", encoding="utf-8") as f:
                 these_tags = [t.strip().lower() for t in f.read().split(",")]
 
             for to_find in tags:
@@ -179,7 +179,7 @@ def remove(args):
                     index = these_tags.index(to_find)
                     these_tags.pop(index)
 
-            with open(txt, "w") as f:
+            with open(txt, "w", encoding="utf-8") as f:
                 f.write(", ".join(these_tags))
 
             if found:
@@ -196,7 +196,7 @@ def replace(args):
     total = 0
     for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**.txt"), recursive=args.recursive))):
         if get_caption_file_image(txt):
-            with open(txt, "r") as f:
+            with open(txt, "r", encoding="utf-8") as f:
                 these_tags = [t.strip().lower() for t in f.read().split(",")]
 
             if to_find in these_tags:
@@ -205,7 +205,7 @@ def replace(args):
                 these_tags.pop(index)
                 these_tags.insert(index, to_replace)
 
-                with open(txt, "w") as f:
+                with open(txt, "w", encoding="utf-8") as f:
                     f.write(", ".join(these_tags))
 
                 modified += 1
@@ -223,7 +223,7 @@ def strip_suffix(args):
     for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**.txt"), recursive=args.recursive))):
         found = False
         if get_caption_file_image(txt):
-            with open(txt, "r") as f:
+            with open(txt, "r", encoding="utf-8") as f:
                 these_tags = [t.strip().lower() for t in f.read().split(",")]
 
             new_tags = []
@@ -234,7 +234,7 @@ def strip_suffix(args):
                     stripped_tags += 1
                 new_tags.append(t)
 
-            with open(txt, "w") as f:
+            with open(txt, "w", encoding="utf-8") as f:
                 f.write(", ".join(new_tags))
 
             if found:
@@ -252,7 +252,7 @@ def move_to_front(args):
     for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**.txt"), recursive=args.recursive))):
         found = False
         if get_caption_file_image(txt):
-            with open(txt, "r") as f:
+            with open(txt, "r", encoding="utf-8") as f:
                 these_tags = [t.strip().lower() for t in f.read().split(",")]
 
             for t in tags:
@@ -260,7 +260,7 @@ def move_to_front(args):
                     found = True
                     these_tags.insert(0, these_tags.pop(these_tags.index(t)))
 
-            with open(txt, "w") as f:
+            with open(txt, "w", encoding="utf-8") as f:
                 f.write(", ".join(these_tags))
 
             if found:
@@ -302,7 +302,7 @@ def move_categories_to_front(args):
     for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**.txt"), recursive=args.recursive))):
         found = False
         if get_caption_file_image(txt):
-            with open(txt, "r") as f:
+            with open(txt, "r", encoding="utf-8") as f:
                 these_tags = list(sorted(to_danbooru_tag(t) for t in f.read().split(",")))
 
             for tag_category in order:
@@ -316,7 +316,7 @@ def move_categories_to_front(args):
 
             these_tags = [convert_tag(t) for t in these_tags]
 
-            with open(txt, "w") as f:
+            with open(txt, "w", encoding="utf-8") as f:
                 f.write(", ".join(these_tags))
 
             if found:
@@ -412,7 +412,7 @@ def validate(args):
             problems.append((txt, "Caption file has more than one corresponding image"))
             continue
 
-        with open(txt, "r") as f:
+        with open(txt, "r", encoding="utf-8") as f:
             tag_string = f.read().strip()
 
         if not tag_string:
