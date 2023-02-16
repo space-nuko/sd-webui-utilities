@@ -42,7 +42,7 @@ def worker(post):
     if not g_run_loops:
         return
     folder = str(post["id"] % 1000).rjust(4, "0")
-    outpath = os.path.join(outdir, folder, f"{post['id']}_meta.json")
+    outpath = os.path.join(outdir, folder, f"{post['id']}.json")
     #print(f"Saving: {outpath}")
     if os.path.isfile(outpath):
         print(f"EXISTS: {outpath}")
