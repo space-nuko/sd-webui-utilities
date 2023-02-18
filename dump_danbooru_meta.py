@@ -62,12 +62,17 @@ datestr = today.strftime('%Y_%m_%d_%H-%M-%S')
 limit = 200
 
 def dump(meta_type):
+    foundinarow = 0
     resp = requests.get(f"https://danbooru.donmai.us/{meta_type}.json", params={"tags": "status:any", "limit": limit}, headers=HEADERS, auth=dbr_auth)
     posts = resp.json()
     assert len(posts) == limit
     no = the_no or max([p["id"] for p in posts])
 
     while no > limit * -2:
+        #if foundinarow > 10:
+        #    print("!!!!! Probably reached last dump region, returning !!!!!")
+        #    return
+
         retries = 0
         results = []
         print(f"===== Page {no} =====")
@@ -102,8 +107,12 @@ def dump(meta_type):
         signal.signal(signal.SIGINT, original_sigint)
 
         if len(results) == limit and all(not r for r in results):
-            print("!!!!! All items on this page were found already. !!!!!")
-            break
+            foundinarow += 1
+            print("!!!!! All items on this page were found already !!!!!")
+            no -= 200
+            continue
+
+        foundinarow = 0
 
         if posts:
             min_id = min([p["id"] for p in posts])
