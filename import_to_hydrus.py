@@ -71,7 +71,7 @@ def valid_file_path(path):
 
 
 def get_negatives(line):
-    negatives = line.replace("negative prompt: ","negative:",1)
+    negatives = line.replace("Negative prompt: ","negative:",1)
     return negatives
 
 
@@ -90,12 +90,13 @@ def get_tokens(line):
     return tokens
 
 
-re_wildcard_prompt = re.compile(r'wildcard prompt: "[^"]*?"(?:,|$) ')
+annoying_infotext_fields = ["Wildcard prompt", "X Values", "Y Values", "Z Values"]
+re_annoying_infotext_fields = re.compile(rf'({"|".join(annoying_infotext_fields)}): "[^"]*?"(?:, |$)')
 re_extra_net = re.compile(r"<(\w+):([^>]+)>")
 
 
-def strip_wildcard_prompt(settings):
-    return re.sub(re_wildcard_prompt, "", settings)
+def strip_annoying_infotext_fields(settings):
+    return re.sub(re_annoying_infotext_fields, "", settings)
 
 
 def parse_prompt(prompt):
@@ -133,7 +134,7 @@ def parse_prompts(prompts):
 def get_tags_from_pnginfo(params):
     raw_prompt, extra_network_params = parse_prompt(params)
 
-    lines = raw_prompt.lower().split("\n")
+    lines = raw_prompt.split("\n")
     settings_lines = ""
     negatives = None
     prompt = ""
@@ -150,7 +151,7 @@ def get_tags_from_pnginfo(params):
                 continue
 
             if line_is == "negative":
-                if stripped_line.startswith("steps: "):
+                if stripped_line.startswith("Steps: "):
                     line_is = "settings"
                     settings_lines += stripped_line + "\n"
                     continue
@@ -160,19 +161,20 @@ def get_tags_from_pnginfo(params):
                 settings_lines += stripped_line + "\n"
                 continue
 
-            if stripped_line.startswith("negative prompt: "):
+            if stripped_line.startswith("Negative prompt: "):
                 line_is = "negative"
                 negatives = get_negatives(stripped_line)
                 continue
 
             prompt += stripped_line + "\n"
 
-    settings_lines = strip_wildcard_prompt(settings_lines)
-    settings = get_settings(settings_lines)
+    settings_lines = strip_annoying_infotext_fields(settings_lines)
+    settings = get_settings(settings_lines.lower())
 
     addnet_models = []
     to_remove = []
     for tag in settings:
+        tag = tag.lower()
         if addnet_re.search(tag):
             to_remove.append(tag)
             if tag.startswith("addnet_model"):
@@ -206,8 +208,10 @@ def get_tags_from_pnginfo(params):
             ts = prompt_parser.parse_prompt_attention(prompt)
             full_line = ""
             for token, weight in ts:
-                full_line += token
-            all_tokens = get_tokens(full_line)
+                if token == "BREAK":
+                    continue
+                full_line += token + ","
+            all_tokens = get_tokens(full_line.lower())
             tokens.update(all_tokens)
 
     extra_networks = []
@@ -216,7 +220,8 @@ def get_tags_from_pnginfo(params):
         for arglist in arglists:
             extra_networks.append(f"extra_networks_{network_type}:{arglist[0]}")
 
-    tags = list(tokens) + settings + extra_networks
+    all_tokens = list(tokens) + settings + extra_networks
+    tags = [t for t in all_tokens if t]
     if negatives:
         tags += [negatives]
 

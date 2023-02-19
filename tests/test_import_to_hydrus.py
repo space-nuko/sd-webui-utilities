@@ -3,6 +3,61 @@ import import_to_hydrus
 from pprint import pp
 
 class ImportToHydrusTest(unittest.TestCase):
+    def test_parses_break(self):
+        infotext = """masterpiece
+BREAK
+1girl
+BREAK
+((outdoors)), egyptian,
+Negative prompt: lowres
+Steps: 24, Sampler: DPM++ SDE Karras, CFG scale: 7, Seed: 1, Size: 512x768, Model hash: 0873291ac5, Model: AbyssOrangeMix2_nsfw, Clip skip: 2, ENSD: 31337
+        """
+
+        tags = import_to_hydrus.get_tags_from_pnginfo(infotext)
+
+        self.assertEqual(tags,
+            {'1girl',
+             'cfg_scale:7',
+             'clip_skip:2',
+             'egyptian',
+             'ensd:31337',
+             'masterpiece',
+             'model:abyssorangemix2_nsfw',
+             'model_hash:0873291ac5',
+             'negative:lowres',
+             'outdoors',
+             'sampler:dpm++_sde_karras',
+             'seed:1',
+             'size:512x768',
+             'steps:24'})
+
+    def test_parses_xyz_grid(self):
+        infotext = """1girl
+Negative prompt: (worst quality, low quality:1.4)
+Steps: 20, Sampler: DPM++ SDE Karras, CFG scale: 5, Seed: 1964718363, Size: 512x512, Model hash: 736a6f43c2, Denoising strength: 0.5, Clip skip: 2, Hires upscale: 1.75, Hires steps: 14, Hires upscaler: Latent (nearest-exact), Script: X/Y/Z plot, X Type: Prompt S/R, X Values: "<lora:cru5rb:0.5> , <lora:cru5rb:0.6>,<lora:cru5rb:0.7>,  <lora:cru5rb:0.8> ,<lora:cru5rb:0.9> , <lora:cru5rb:1>,"
+        """
+
+        tags = import_to_hydrus.get_tags_from_pnginfo(infotext)
+
+        pp(tags)
+        self.assertEqual(tags,
+            {'1girl',
+             'cfg_scale:5',
+             'clip_skip:2',
+             'denoising_strength:0.5',
+             'extra_networks_lora:cru5rb',
+             'hires_steps:14',
+             'hires_upscale:1.75',
+             'hires_upscaler:latent_(nearest-exact)',
+             'model_hash:736a6f43c2',
+             'negative:(worst quality, low quality:1.4)',
+             'sampler:dpm++_sde_karras',
+             'script:x/y/z_plot',
+             'seed:1964718363',
+             'size:512x512',
+             'steps:20',
+             'x_type:prompt_s/r'})
+
     def test_parses_extra_networks(self):
         infotext = """(colorful:1.3),
 dreamlike fantasy landscape where everything is a shade of pink,
