@@ -26,6 +26,7 @@ import tqdm
 from PIL import Image
 from pprint import pp
 import prompt_parser
+from typing import Tuple, Any
 
 import hydrus_api
 import hydrus_api.utils
@@ -130,12 +131,36 @@ def parse_prompts(prompts):
     return res, extra_data
 
 
+TEMPLATE_LABEL = "Template"
+NEGATIVE_TEMPLATE_LABEL = "Negative Template"
+
+
+def strip_template_info(settings) -> str:
+    """dynamic-prompts"""
+    split_by = None
+    if (
+        f"\n{TEMPLATE_LABEL}:" in settings
+        and f"\n{NEGATIVE_TEMPLATE_LABEL}:" in settings
+    ):
+        split_by = f"{TEMPLATE_LABEL}"
+    elif f"\n{NEGATIVE_TEMPLATE_LABEL}:" in settings:
+        split_by = f"\n{NEGATIVE_TEMPLATE_LABEL}:"
+    elif f"\n{TEMPLATE_LABEL}:" in settings:
+        split_by = f"\n{TEMPLATE_LABEL}:"
+
+    if split_by:
+        settings = (
+            settings.split(split_by)[0].strip()
+        )
+    return settings
+
 
 def get_tags_from_pnginfo(params):
     raw_prompt, extra_network_params = parse_prompt(params)
 
     lines = raw_prompt.split("\n")
     settings_lines = ""
+    negative_prompt = ""
     negatives = None
     prompt = ""
 
@@ -169,6 +194,7 @@ def get_tags_from_pnginfo(params):
             prompt += stripped_line + "\n"
 
     settings_lines = strip_annoying_infotext_fields(settings_lines)
+    settings_lines = strip_template_info(settings_lines)
     settings = get_settings(settings_lines.lower())
 
     addnet_models = []
@@ -215,7 +241,6 @@ def get_tags_from_pnginfo(params):
             tokens.update(all_tokens)
 
     extra_networks = []
-    print(extra_network_params)
     for network_type, arglists in extra_network_params.items():
         for arglist in arglists:
             extra_networks.append(f"extra_networks_{network_type}:{arglist[0]}")

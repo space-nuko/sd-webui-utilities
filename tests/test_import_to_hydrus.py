@@ -31,6 +31,42 @@ Steps: 24, Sampler: DPM++ SDE Karras, CFG scale: 7, Seed: 1, Size: 512x768, Mode
              'size:512x768',
              'steps:24'})
 
+    def test_parses_dynamic_prompt_templates(self):
+        infotext = """1girl, pink hair
+Negative prompt: (worst quality, low quality:1.4)
+Steps: 20, Sampler: DPM++ SDE Karras, CFG scale: 6, Seed: 780207036, Size: 512x768, Model hash: 0873291ac5, Model: AbyssOrangeMix2_nsfw, Denoising strength: 0.2, ENSD: 31337, Mask blur: 1, SD upscale overlap: 64, SD upscale upscaler: 4x_Valar_v1, AddNet Enabled: True, AddNet Module 1: LoRA, AddNet Model 1: ElysiaV3-000002(6d3eb064dcc1), AddNet Weight A 1: 0.9, AddNet Weight B 1: 0.9, AddNet Module 2: LoRA, AddNet Model 2: elfmorie2(a34cd9a8c3cc), AddNet Weight A 2: 1, AddNet Weight B 2: 1
+Template: 1girl, __haircolor__
+Negative Template: (worst quality, low quality:1.4), __badprompt__
+        """
+
+        tags = import_to_hydrus.get_tags_from_pnginfo(infotext)
+
+        pp(tags)
+        self.assertEqual(tags,
+            {'1girl',
+             'addnet_enabled:true',
+             'addnet_model:elfmorie2(a34cd9a8c3cc)',
+             'addnet_model:elysiav3-000002(6d3eb064dcc1)',
+             'addnet_model_hash:6d3eb064dcc1',
+             'addnet_model_hash:a34cd9a8c3cc',
+             'addnet_model_name:elfmorie2',
+             'addnet_model_name:elysiav3-000002',
+             'cfg_scale:6',
+             'denoising_strength:0.2',
+             'ensd:31337',
+             'mask_blur:1',
+             'model:abyssorangemix2_nsfw',
+             'model_hash:0873291ac5',
+             'negative:(worst quality, low quality:1.4)',
+             'pink_hair',
+             'sampler:dpm++_sde_karras',
+             'sd_upscale_overlap:64',
+             'sd_upscale_upscaler:4x_valar_v1',
+             'seed:780207036',
+             'size:512x768',
+             'steps:20'})
+
+
     def test_parses_xyz_grid(self):
         infotext = """1girl
 Negative prompt: (worst quality, low quality:1.4)
@@ -39,7 +75,6 @@ Steps: 20, Sampler: DPM++ SDE Karras, CFG scale: 5, Seed: 1964718363, Size: 512x
 
         tags = import_to_hydrus.get_tags_from_pnginfo(infotext)
 
-        pp(tags)
         self.assertEqual(tags,
             {'1girl',
              'cfg_scale:5',
