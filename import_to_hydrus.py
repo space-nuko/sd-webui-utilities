@@ -85,19 +85,22 @@ def get_tokens(line):
     prompt = line.replace(":",";")          # Replace : to avoid unwanted namespaces
     tokens = prompt.split(",")
     tokens = [token.strip().replace(" ","_") for token in tokens]
-    tokens = list(filter(None, tokens))
+    tokens = list(filter(lambda t: t, tokens))
     return tokens
 
 
-def get_tags_from_pnginfo(image):
-    params = image.info["parameters"].lower()
-    lines = params.split("\n")
-    settings = get_settings(lines[len(lines)-1])
-    lines.remove(lines[len(lines)-1])
+re_wildcard_prompt = re.compile(r'wildcard prompt: "[^"]*?"(?:,|$) ')
+def strip_wildcard_prompt(settings):
+    return re.sub(re_wildcard_prompt, "", settings)
+
+
+def get_tags_from_pnginfo(params):
+    lines = params.lower().split("\n")
+    settings_lines = ""
     negatives = None
     prompt = ""
 
-    line_is_negative = False
+    line_is = "positive"
 
     if len(lines) == 2:
         prompt = lines[0]
@@ -108,16 +111,29 @@ def get_tags_from_pnginfo(image):
             if stripped_line == "":
                 continue
 
-            if line_is_negative:
+            if line_is == "negative":
+                if stripped_line.startswith("steps: "):
+                    line_is = "settings"
+                    settings_lines += stripped_line + "\n"
+                    continue
                 negatives += ", " + stripped_line
+                continue
+            elif line_is == "settings":
+                settings_lines += stripped_line + "\n"
                 continue
 
             if stripped_line.startswith("negative prompt: "):
-                line_is_negative = True
+                line_is = "negative"
                 negatives = get_negatives(stripped_line)
                 continue
 
             prompt += stripped_line + "\n"
+
+    print(settings_lines)
+    settings_lines = strip_wildcard_prompt(settings_lines)
+    print(settings_lines)
+
+    settings = get_settings(settings_lines)
 
     addnet_models = []
     to_remove = []
@@ -210,6 +226,12 @@ def import_path(client, path, tags=(), recursive=True, service_names=("stable-di
         try:
             image = Image.open(path)
             image.load()
+
+            extrema = image.convert("L").getextrema()
+            if extrema == (0, 0):
+                print(f"!!! SKIPPING (all black): {path}")
+                continue
+
         except Exception as ex:
             print(f"!!! FAILED to open: {path} ({ex})")
             continue
@@ -217,7 +239,9 @@ def import_path(client, path, tags=(), recursive=True, service_names=("stable-di
         if "parameters" not in image.info:
             continue
 
-        tags = get_tags_from_pnginfo(image)
+
+        params = image.info["parameters"]
+        tags = get_tags_from_pnginfo(params)
         tags.update(default_tags)
         tag_sets[tuple(sorted(tags))].add(realpath)
         parameters[realpath] = image.info["parameters"]
