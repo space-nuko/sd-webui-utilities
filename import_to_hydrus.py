@@ -18,6 +18,7 @@
 
 import argparse
 import collections
+from collections import defaultdict
 import os
 import re
 import dotenv
@@ -90,12 +91,49 @@ def get_tokens(line):
 
 
 re_wildcard_prompt = re.compile(r'wildcard prompt: "[^"]*?"(?:,|$) ')
+re_extra_net = re.compile(r"<(\w+):([^>]+)>")
+
+
 def strip_wildcard_prompt(settings):
     return re.sub(re_wildcard_prompt, "", settings)
 
 
+def parse_prompt(prompt):
+    res = defaultdict(list)
+
+    def found(m):
+        name = m.group(1)
+        args = m.group(2)
+
+        res[name].append(args.split(":"))
+
+        return ""
+
+    prompt = re.sub(re_extra_net, found, prompt)
+
+    return prompt, res
+
+
+def parse_prompts(prompts):
+    res = []
+    extra_data = None
+
+    for prompt in prompts:
+        updated_prompt, parsed_extra_data = parse_prompt(prompt)
+
+        if extra_data is None:
+            extra_data = parsed_extra_data
+
+        res.append(updated_prompt)
+
+    return res, extra_data
+
+
+
 def get_tags_from_pnginfo(params):
-    lines = params.lower().split("\n")
+    raw_prompt, extra_network_params = parse_prompt(params)
+
+    lines = raw_prompt.lower().split("\n")
     settings_lines = ""
     negatives = None
     prompt = ""
@@ -129,10 +167,7 @@ def get_tags_from_pnginfo(params):
 
             prompt += stripped_line + "\n"
 
-    print(settings_lines)
     settings_lines = strip_wildcard_prompt(settings_lines)
-    print(settings_lines)
-
     settings = get_settings(settings_lines)
 
     addnet_models = []
@@ -175,7 +210,13 @@ def get_tags_from_pnginfo(params):
             all_tokens = get_tokens(full_line)
             tokens.update(all_tokens)
 
-    tags = list(tokens) + settings
+    extra_networks = []
+    print(extra_network_params)
+    for network_type, arglists in extra_network_params.items():
+        for arglist in arglists:
+            extra_networks.append(f"extra_networks_{network_type}:{arglist[0]}")
+
+    tags = list(tokens) + settings + extra_networks
     if negatives:
         tags += [negatives]
 
