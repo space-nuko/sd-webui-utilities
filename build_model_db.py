@@ -86,6 +86,8 @@ with Session() as session:
             metadata = safetensors_hack.read_metadata(f)
         except:
             continue
+        if "ss_lr_scheduler" not in metadata:
+            continue
         lora_model = LoRAModel(
             filepath=f,
             filename=os.path.basename(f),
@@ -147,7 +149,8 @@ with Session() as session:
             vae_name=metadata.get("ss_vae_name", None),
             training_comment=metadata.get("ss_training_comment", None),
             bucket_info=metadata.get("ss_bucket_info", None),
-            sd_scripts_commit_hash=metadata.get("ss_sd_scripts_commit_hash", None)
+            sd_scripts_commit_hash=metadata.get("ss_sd_scripts_commit_hash", None),
+            noise_offset=metadata.get("ss_noise_offset", None)
         )
         session.add(lora_model)
 
