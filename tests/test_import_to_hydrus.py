@@ -13,7 +13,7 @@ Negative prompt: lowres
 Steps: 24, Sampler: DPM++ SDE Karras, CFG scale: 7, Seed: 1, Size: 512x768, Model hash: 0873291ac5, Model: AbyssOrangeMix2_nsfw, Clip skip: 2, ENSD: 31337
         """
 
-        tags = import_to_hydrus.get_tags_from_pnginfo(infotext)
+        tags = import_to_hydrus.parse_tags_from_pnginfo(infotext)
 
         self.assertEqual(tags,
             {'1girl',
@@ -31,6 +31,36 @@ Steps: 24, Sampler: DPM++ SDE Karras, CFG scale: 7, Seed: 1, Size: 512x768, Mode
              'size:512x768',
              'steps:24'})
 
+    def test_parses_and(self):
+        infotext = """masterpiece, 1girl
+        AND
+        (best quality), white background
+        Negative prompt: (worst quality, low quality:1.3)
+        Steps: 30, Sampler: DPM++ 2M Karras, CFG scale: 3, Seed: 988597816, Size: 512x832, Model hash: 2919efc7cc, Model: AOM2-nutmegmixGav2+ElysV3, Batch size: 8, Batch pos: 3, Clip skip: 2, ENSD: 31334
+        """
+
+        tags = import_to_hydrus.parse_tags_from_pnginfo(infotext)
+
+        self.assertEqual(tags,
+            {'1girl',
+             'batch_pos:3',
+             'batch_size:8',
+             'best_quality',
+             'cfg_scale:3',
+             'clip_skip:2',
+             'ensd:31334',
+             'masterpiece',
+             'model:aom2-nutmegmixgav2+elysv3',
+             'model_hash:2919efc7cc',
+             'negative:(worst quality, low quality:1.3)',
+             'sampler:dpm++_2m_karras',
+             'seed:988597816',
+             'size:512x832',
+             'steps:30',
+             'uses_multicond:true',
+             'white_background'})
+
+
     def test_parses_dynamic_prompt_templates(self):
         infotext = """1girl, pink hair
 Negative prompt: (worst quality, low quality:1.4)
@@ -39,9 +69,8 @@ Template: 1girl, __haircolor__
 Negative Template: (worst quality, low quality:1.4), __badprompt__
         """
 
-        tags = import_to_hydrus.get_tags_from_pnginfo(infotext)
+        tags = import_to_hydrus.parse_tags_from_pnginfo(infotext)
 
-        pp(tags)
         self.assertEqual(tags,
             {'1girl',
              'addnet_enabled:true',
@@ -73,7 +102,7 @@ Negative prompt: (worst quality, low quality:1.4)
 Steps: 20, Sampler: DPM++ SDE Karras, CFG scale: 5, Seed: 1964718363, Size: 512x512, Model hash: 736a6f43c2, Denoising strength: 0.5, Clip skip: 2, Hires upscale: 1.75, Hires steps: 14, Hires upscaler: Latent (nearest-exact), Script: X/Y/Z plot, X Type: Prompt S/R, X Values: "<lora:cru5rb:0.5> , <lora:cru5rb:0.6>,<lora:cru5rb:0.7>,  <lora:cru5rb:0.8> ,<lora:cru5rb:0.9> , <lora:cru5rb:1>,"
         """
 
-        tags = import_to_hydrus.get_tags_from_pnginfo(infotext)
+        tags = import_to_hydrus.parse_tags_from_pnginfo(infotext)
 
         self.assertEqual(tags,
             {'1girl',
@@ -101,7 +130,7 @@ Negative prompt: (worst quality:1.4), (low quality:1.4) , (monochrome:1.1)
 Steps: 40, Sampler: DPM++ 2M Karras, CFG scale: 12, Seed: 2416682767, Size: 640x512, Model hash: 0f0eaaa61e, Model: pastelmix-better-vae-fp16, Denoising strength: 0.55, Clip skip: 2, ENSD: 31337, Hires upscale: 2, Hires steps: 20, Hires upscaler: Latent
 """
 
-        tags = import_to_hydrus.get_tags_from_pnginfo(infotext)
+        tags = import_to_hydrus.parse_tags_from_pnginfo(infotext)
 
         self.assertEqual(tags,
             {'cfg_scale:12',
@@ -130,7 +159,7 @@ Steps: 40, Sampler: DPM++ 2M Karras, CFG scale: 9, Seed: 2976004442, Size: 576x5
 (Daniel F. Gerhartz:1.1), (Sally Mann:0.9), (Henry Ascencio:1.1), (Emile Vernon:1.1), (Tom Bagshaw:1.1), (Krenz Cushart:1.2)", File includes: , Hires resize: 1152x1024, Hires upscaler: Latent (nearest-exact), Discard penultimate sigma: True
         """
 
-        tags = import_to_hydrus.get_tags_from_pnginfo(infotext)
+        tags = import_to_hydrus.parse_tags_from_pnginfo(infotext)
 
         self.assertEqual(tags,
             {'1girl',

@@ -19,6 +19,7 @@
 import argparse
 import collections
 from collections import defaultdict
+from io import BytesIO
 import os
 import re
 import dotenv
@@ -27,25 +28,35 @@ from PIL import Image
 from pprint import pp
 import prompt_parser
 from typing import Tuple, Any
+from pprint import pp
 
 import hydrus_api
 import hydrus_api.utils
 
+
 ERROR_EXIT_CODE = 1
-REQUIRED_PERMISSIONS = {hydrus_api.Permission.IMPORT_FILES, hydrus_api.Permission.ADD_TAGS}
+REQUIRED_PERMISSIONS = {hydrus_api.Permission.IMPORT_FILES, hydrus_api.Permission.ADD_TAGS, hydrus_api.Permission.SEARCH_FILES}
 addnet_re = re.compile(r'^addnet_.+_\d+')
 addnet_model_re = re.compile(r'(.*)\(([a-f0-9]+)\)$')
+re_AND = re.compile(r"\bAND\b")
 
 
-argument_parser = argparse.ArgumentParser()
-argument_parser.add_argument("paths", nargs="+")
-argument_parser.add_argument("--tag", "-t", action="append", dest="tags", default=[])
-argument_parser.add_argument("--service", "-s", action="append", dest="services", default=["stable-diffusion-webui"])
-argument_parser.add_argument("--no-recursive", "-n", action="store_false", dest="recursive")
-argument_parser.add_argument("--no-protect-decompression", "-d", action="store_false", dest="protect_decompression")
-#argument_parser.add_argument("--no-read-metadata", "-m", action="store_false", dest="read_metadata")
-argument_parser.add_argument("--api-url", "-a", default=hydrus_api.DEFAULT_API_URL)
-argument_parser.add_argument("--api_key", "-k", default=None)
+parser = argparse.ArgumentParser()
+parser.add_argument("--service", "-s", default="stable-diffusion-webui")
+parser.add_argument("--api-url", "-a", default=hydrus_api.DEFAULT_API_URL)
+parser.add_argument("--api_key", "-k", default=None)
+parser.add_argument("--no-protect-decompression", "-d", action="store_false", dest="protect_decompression")
+subparsers = parser.add_subparsers(dest="command", help='sub-command help')
+
+parser_import = subparsers.add_parser('import', help='Import new files')
+parser_import.add_argument("paths", nargs="+")
+parser_import.add_argument("--tag", "-t", action="append", dest="tags", default=[])
+parser_import.add_argument("--no-recursive", "-n", action="store_false", dest="recursive")
+parser_import.add_argument("--no-protect-decompression", "-d", action="store_false", dest="protect_decompression")
+#parser_import.add_argument("--no-read-metadata", "-m", action="store_false", dest="read_metadata")
+
+parser_retag = subparsers.add_parser('retag', help='Retag existing files')
+#parser_import.add_argument("--no-read-metadata", "-m", action="store_false", dest="read_metadata")
 
 
 cache = set()
@@ -71,8 +82,12 @@ def valid_file_path(path):
     return realpath not in cache and os.path.isfile(path) or os.path.islink(path) and os.path.isfile(realpath) and realpath.endswith(".png")
 
 
+re_whitespace = re.compile(r'  +')
+
+
 def get_negatives(line):
-    negatives = line.replace("Negative prompt: ","negative:",1)
+    negatives = line.replace("Negative prompt: ","negative:",1).strip()
+    negatives = re.sub(re_whitespace, " ", negatives)
     return negatives
 
 
@@ -155,7 +170,7 @@ def strip_template_info(settings) -> str:
     return settings
 
 
-def get_tags_from_pnginfo(params):
+def parse_tags_from_pnginfo(params):
     raw_prompt, extra_network_params = parse_prompt(params)
 
     lines = raw_prompt.split("\n")
@@ -175,11 +190,11 @@ def get_tags_from_pnginfo(params):
             if stripped_line == "":
                 continue
 
+            if stripped_line.startswith("Steps: "):
+                line_is = "settings"
+                settings_lines = stripped_line + "\n"
+                continue
             if line_is == "negative":
-                if stripped_line.startswith("Steps: "):
-                    line_is = "settings"
-                    settings_lines += stripped_line + "\n"
-                    continue
                 negatives += ", " + stripped_line
                 continue
             elif line_is == "settings":
@@ -225,8 +240,12 @@ def get_tags_from_pnginfo(params):
             steps = int(t.replace("steps:", ""))
             break
 
+    subprompts = re_AND.split(prompt)
+    if len(subprompts) > 1:
+        settings.append("uses_multicond:true")
+
     # Reconstruct tags from parsed attention
-    for parsed in prompt_parser.get_learned_conditioning_prompt_schedules([prompt], steps):
+    for parsed in prompt_parser.get_learned_conditioning_prompt_schedules(subprompts, steps):
         if len(parsed) > 1:
             settings.append("uses_prompt_editing:true")
         for t in parsed:
@@ -257,7 +276,7 @@ def get_tags_from_pnginfo(params):
     return tags
 
 
-def import_path(client, path, tags=(), recursive=True, service_names=("stable-diffusion-webui",)):
+def import_path(client, path, tags=(), recursive=True, service_name="stable-diffusion-webui"):
     default_tags = tags
     tag_sets = collections.defaultdict(set)
     parameters = {}
@@ -265,7 +284,7 @@ def import_path(client, path, tags=(), recursive=True, service_names=("stable-di
     def do_import(tag_sets, parameters):
         global cache
         for tags, paths in tqdm.tqdm(tag_sets.items()):
-            results = client.add_and_tag_files(paths, tags, service_names)
+            results = client.add_and_tag_files(paths, tags, (service_name,))
             for path, result in zip(paths, results):
                 status = result.get("status", 4)
 
@@ -312,7 +331,7 @@ def import_path(client, path, tags=(), recursive=True, service_names=("stable-di
 
 
         params = image.info["parameters"]
-        tags = get_tags_from_pnginfo(params)
+        tags = parse_tags_from_pnginfo(params)
         tags.update(default_tags)
         tag_sets[tuple(sorted(tags))].add(realpath)
         parameters[realpath] = image.info["parameters"]
@@ -325,17 +344,8 @@ def import_path(client, path, tags=(), recursive=True, service_names=("stable-di
     do_import(tag_sets, parameters)
 
 
-def main(arguments):
+def cmd_import(arguments, client):
     global cache
-
-    api_key = arguments.api_key or os.getenv("HYDRUS_ACCESS_KEY")
-    client = hydrus_api.Client(api_key, arguments.api_url)
-    if not hydrus_api.utils.verify_permissions(client, REQUIRED_PERMISSIONS):
-        print("The API key does not grant all required permissions:", REQUIRED_PERMISSIONS)
-        return ERROR_EXIT_CODE
-
-    if not arguments.protect_decompression:
-        Image.MAX_IMAGE_PIXELS = None
 
     if os.path.isfile("hydrus_import_cache.txt"):
         with open("hydrus_import_cache.txt", "r", encoding="utf-8") as f:
@@ -349,7 +359,7 @@ def main(arguments):
             path,
             arguments.tags,
             arguments.recursive,
-            arguments.services,
+            arguments.service,
         )
 
     with open("hydrus_import_cache.txt", "w", encoding="utf-8") as f:
@@ -357,7 +367,82 @@ def main(arguments):
             f.write(line + "\n")
 
 
+def cmd_retag(arguments, client):
+    keep_tags = ["board", "site", "gen_type"]
+    all_file_ids = client.search_files(["system:everything"])
+    service_key = None
+    for file_ids in hydrus_api.utils.yield_chunks(all_file_ids, 100):
+        metas = client.get_file_metadata(file_ids=file_ids, include_notes=True)
+        if service_key is None:
+            service_key = next(filter(lambda k: metas[0]["tags"][k]["name"] == arguments.service, metas[0]["tags"].keys()))
+            assert service_key
+
+        for meta in metas:
+            file_id = meta["file_id"]
+            notes = meta["notes"]
+            # pp(meta)
+
+            if "parameters" not in notes:
+                resp = client.get_file(file_id=file_id)
+                with BytesIO() as b:
+                    for chunk in resp:
+                        b.write(chunk)
+                    img = Image.open(b)
+                    if not "parameters" in img.info:
+                        continue
+                    notes["parameters"] = img.info["parameters"]
+
+            existing_tags = set(meta["tags"][service_key]["storage_tags"][str(hydrus_api.TagStatus.CURRENT)])
+            new_tags = set(parse_tags_from_pnginfo(notes["parameters"]))
+
+            for tag in existing_tags:
+                if ":" in tag and not tag.startswith("negative:"):
+                    new_tags.add(tag)
+
+            # pp(existing_tags)
+            # pp(new_tags)
+            print(f"- {meta['hash']}")
+            print("exist - new:")
+            pp(existing_tags - new_tags)
+            print("new - exist:")
+            pp(new_tags - existing_tags)
+            print("================")
+
+            params_delete = {
+                service_key: {
+                    str(hydrus_api.TagAction.DELETE): list(existing_tags),
+                }
+            }
+            params_add = {
+                service_key: {
+                    str(hydrus_api.TagAction.ADD): list(new_tags),
+                }
+            }
+            client.add_tags(file_ids=[file_id], service_keys_to_actions_to_tags=params_delete)
+            client.add_tags(file_ids=[file_id], service_keys_to_actions_to_tags=params_add)
+            client.set_notes(notes=notes, file_id=file_id)
+
+
+def main(arguments):
+    api_key = arguments.api_key or os.getenv("HYDRUS_ACCESS_KEY")
+    client = hydrus_api.Client(api_key, arguments.api_url)
+    if not hydrus_api.utils.verify_permissions(client, REQUIRED_PERMISSIONS):
+        print("The API key does not grant all required permissions:", REQUIRED_PERMISSIONS)
+        return ERROR_EXIT_CODE
+
+    if not arguments.protect_decompression:
+        Image.MAX_IMAGE_PIXELS = None
+
+    if arguments.command == "import":
+        cmd_import(arguments, client)
+    elif arguments.command == "retag":
+        cmd_retag(arguments, client)
+    else:
+        parser.print_help()
+        return 1
+
+
 if __name__ == "__main__":
     dotenv.load_dotenv()
-    arguments = argument_parser.parse_args()
-    argument_parser.exit(main(arguments))
+    arguments = parser.parse_args()
+    parser.exit(main(arguments))
