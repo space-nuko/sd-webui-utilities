@@ -24,6 +24,7 @@ import os
 import re
 import dotenv
 import tqdm
+import signal
 from PIL import Image
 from pprint import pp
 import prompt_parser
@@ -32,6 +33,10 @@ from pprint import pp
 
 import hydrus_api
 import hydrus_api.utils
+
+
+def null_handler(signum, frame):
+    pass
 
 
 ERROR_EXIT_CODE = 1
@@ -56,6 +61,7 @@ parser_import.add_argument("--no-protect-decompression", "-d", action="store_fal
 #parser_import.add_argument("--no-read-metadata", "-m", action="store_false", dest="read_metadata")
 
 parser_retag = subparsers.add_parser('retag', help='Retag existing files')
+parser_retag.add_argument("query", nargs="+")
 #parser_import.add_argument("--no-read-metadata", "-m", action="store_false", dest="read_metadata")
 
 
@@ -369,7 +375,7 @@ def cmd_import(arguments, client):
 
 def cmd_retag(arguments, client):
     keep_tags = ["board", "site", "gen_type"]
-    all_file_ids = client.search_files(["system:everything"])
+    all_file_ids = client.search_files(arguments.query)
     service_key = None
     for file_ids in hydrus_api.utils.yield_chunks(all_file_ids, 100):
         metas = client.get_file_metadata(file_ids=file_ids, include_notes=True)
@@ -378,11 +384,14 @@ def cmd_retag(arguments, client):
             assert service_key
 
         for meta in metas:
+            print(f"- {meta['hash']}")
+            needs_update = False
             file_id = meta["file_id"]
             notes = meta["notes"]
             # pp(meta)
 
             if "parameters" not in notes:
+                needs_update = True
                 resp = client.get_file(file_id=file_id)
                 with BytesIO() as b:
                     for chunk in resp:
@@ -392,7 +401,7 @@ def cmd_retag(arguments, client):
                         continue
                     notes["parameters"] = img.info["parameters"]
 
-            existing_tags = set(meta["tags"][service_key]["storage_tags"][str(hydrus_api.TagStatus.CURRENT)])
+            existing_tags = set(meta["tags"][service_key]["storage_tags"].get(str(hydrus_api.TagStatus.CURRENT), {}))
             new_tags = set(parse_tags_from_pnginfo(notes["parameters"]))
 
             for tag in existing_tags:
@@ -401,26 +410,35 @@ def cmd_retag(arguments, client):
 
             # pp(existing_tags)
             # pp(new_tags)
-            print(f"- {meta['hash']}")
-            print("exist - new:")
-            pp(existing_tags - new_tags)
-            print("new - exist:")
-            pp(new_tags - existing_tags)
-            print("================")
 
-            params_delete = {
-                service_key: {
-                    str(hydrus_api.TagAction.DELETE): list(existing_tags),
+            needs_update = needs_update or (existing_tags - new_tags) or (new_tags - existing_tags)
+
+            if needs_update:
+                print("exist - new:")
+                pp(existing_tags - new_tags)
+                print("new - exist:")
+                pp(new_tags - existing_tags)
+                print("================")
+
+                params_delete = {
+                    service_key: {
+                        str(hydrus_api.TagAction.DELETE): list(existing_tags),
+                    }
                 }
-            }
-            params_add = {
-                service_key: {
-                    str(hydrus_api.TagAction.ADD): list(new_tags),
+                params_add = {
+                    service_key: {
+                        str(hydrus_api.TagAction.ADD): list(new_tags),
+                    }
                 }
-            }
-            client.add_tags(file_ids=[file_id], service_keys_to_actions_to_tags=params_delete)
-            client.add_tags(file_ids=[file_id], service_keys_to_actions_to_tags=params_add)
-            client.set_notes(notes=notes, file_id=file_id)
+
+                original_sigint = signal.getsignal(signal.SIGINT)
+                signal.signal(signal.SIGINT, null_handler)
+
+                client.add_tags(file_ids=[file_id], service_keys_to_actions_to_tags=params_delete)
+                client.add_tags(file_ids=[file_id], service_keys_to_actions_to_tags=params_add)
+                client.set_notes(notes=notes, file_id=file_id)
+
+                signal.signal(signal.SIGINT, original_sigint)
 
 
 def main(arguments):
