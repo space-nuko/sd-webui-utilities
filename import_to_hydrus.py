@@ -289,6 +289,10 @@ def import_path(client, path, tags=(), recursive=True, service_name="stable-diff
 
     def do_import(tag_sets, parameters):
         global cache
+
+        original_sigint = signal.getsignal(signal.SIGINT)
+        signal.signal(signal.SIGINT, null_handler)
+
         for tags, paths in tqdm.tqdm(tag_sets.items()):
             results = client.add_and_tag_files(paths, tags, (service_name,))
             for path, result in zip(paths, results):
@@ -308,6 +312,8 @@ def import_path(client, path, tags=(), recursive=True, service_name="stable-diff
             for line in cache:
                 f.write(line + "\n")
 
+        signal.signal(signal.SIGINT, original_sigint)
+
     i = 0
 
     for path in tqdm.tqdm(list(yield_paths(path, valid_file_path, recursive))):
@@ -316,6 +322,7 @@ def import_path(client, path, tags=(), recursive=True, service_name="stable-diff
 
         realpath = os.path.realpath(path)
         if realpath in cache:
+            #print(f"!!! SKIPPING (in cache): {path}")
             continue
 
         directory_path, filename = os.path.split(path)
@@ -333,8 +340,8 @@ def import_path(client, path, tags=(), recursive=True, service_name="stable-diff
             continue
 
         if "parameters" not in image.info:
+            #print(f"!!! SKIPPING (no parameters): {path}")
             continue
-
 
         params = image.info["parameters"]
         tags = parse_tags_from_pnginfo(params)
@@ -448,8 +455,8 @@ def main(arguments):
         print("The API key does not grant all required permissions:", REQUIRED_PERMISSIONS)
         return ERROR_EXIT_CODE
 
-    if not arguments.protect_decompression:
-        Image.MAX_IMAGE_PIXELS = None
+    #if not arguments.protect_decompression:
+    Image.MAX_IMAGE_PIXELS = None
 
     if arguments.command == "import":
         cmd_import(arguments, client)

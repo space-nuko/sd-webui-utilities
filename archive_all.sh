@@ -1,6 +1,6 @@
 #!/bin/bash
 
-OUTPATH="/d/stable-diffusion/archives/"
+OUTPATH="/e/ar/"
 python hdg_archive.py --board h $OUTPATH
 python hdg_archive.py --board hdg $OUTPATH
 python hdg_archive.py --board d $OUTPATH

@@ -22,7 +22,7 @@ if not os.path.isdir(dir):
     exit(1)
 
 window_name = "crop"
-debug_mode = True
+debug_mode = False
 
 
 def get_image_width_height(image):

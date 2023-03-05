@@ -56,7 +56,11 @@ parser_move_categories_to_front = subparsers.add_parser('move_categories_to_fron
 parser_move_categories_to_front.add_argument('path', type=str, help='Path to caption files')
 parser_move_categories_to_front.add_argument('categories', type=str, nargs='+', help='Categories to move')
 
-parser_strip_tag_suffix = subparsers.add_parser('strip_suffix', help='Strips a suffix from a tag ("neptune_(neptune_series)" -> "neptune")')
+parser_merge = subparsers.add_parser('merge', help='Merge two directories of caption files based on filenames')
+parser_merge.add_argument('target_path', type=str, help='Path with caption files to edit')
+parser_merge.add_argument('to_merge', type=str, help='Path with caption files to merge')
+
+parser_strip_tag_suffix = subparsers.add_parser('strip_suffix', help='Strips a suffix from all tags ("neptune_(neptune_series)" -> "neptune")')
 parser_strip_tag_suffix.add_argument('path', type=str, help='Path to caption files')
 parser_strip_tag_suffix.add_argument('suffix', type=str, help='Suffix to find')
 
@@ -71,6 +75,11 @@ parser_organize.add_argument('path', type=str, help='Path to caption files')
 parser_organize.add_argument('tags', type=str, nargs='+', help='Tags to move')
 parser_organize.add_argument('--folder-name', '-n', type=str, help='Name of subfolder')
 parser_organize.add_argument('--split-rest', '-s', action="store_true", help='Move all non-matching images into another folder')
+
+parser_organize_lowres = subparsers.add_parser('organize_lowres', help='Move images with low resolution into a subfolder')
+parser_organize_lowres.add_argument('path', type=str, help='Path to caption files')
+parser_organize_lowres.add_argument('--folder-name', '-n', type=str, help='Name of subfolder')
+parser_organize_lowres.add_argument('--split-rest', '-s', action="store_true", help='Move all non-matching images into another folder')
 
 args = parser.parse_args()
 
@@ -203,7 +212,10 @@ def replace(args):
                 these_tags = [t.strip().lower() for t in f.read().split(",")]
 
             if to_find in these_tags:
-                assert to_replace not in these_tags
+                if to_replace in these_tags:
+                    index_existing = these_tags.index(to_replace)
+                    these_tags.pop(index_existing)
+
                 index = these_tags.index(to_find)
                 these_tags.pop(index)
                 these_tags.insert(index, to_replace)
@@ -329,9 +341,70 @@ def move_categories_to_front(args):
     print(f"Updated {modified}/{total} caption files.")
 
 
+def merge(args):
+    modified = 0
+    total = 0
+    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.target_path, "*.txt"), recursive=False))):
+        found = False
+
+        other_txt = os.path.join(args.to_merge, os.path.basename(txt))
+        if get_caption_file_image(txt) and os.path.isfile(other_txt) and get_caption_file_image(other_txt):
+            with open(txt, "r", encoding="utf-8") as f:
+                these_tags = [to_danbooru_tag(t) for t in f.read().split(",")]
+
+            with open(other_txt, "r", encoding="utf-8") as f:
+                their_tags = [to_danbooru_tag(t) for t in f.read().split(",")]
+
+            these_tags = [convert_tag(t) for t in these_tags]
+            their_tags = [convert_tag(t) for t in their_tags]
+
+            for tag in their_tags:
+                if tag not in these_tags:
+                    found = True
+                    these_tags.append(tag)
+
+            with open(txt, "w", encoding="utf-8") as f:
+                f.write(", ".join(these_tags))
+
+            if found:
+                modified += 1
+            total += 1
+
+    print(f"Updated {modified}/{total} caption files.")
+
+
+def do_move(txt, img, outpath):
+    os.makedirs(outpath, exist_ok=True)
+    basename = os.path.splitext(os.path.basename(txt))[0]
+    img_ext = os.path.splitext(img)[1]
+    out_txt = os.path.join(outpath, basename + ".txt")
+    out_img = os.path.join(outpath, basename + img_ext)
+    # print(f"{img} -> {out_img}")
+    shutil.move(txt, out_txt)
+    shutil.move(img, out_img)
+
+
 def organize(args):
     tags = [convert_tag(t) for t in args.tags]
     folder_name = args.folder_name or " ".join(args.tags)
+    def test(txt, img):
+        with open(txt, "r", encoding="utf-8") as f:
+            these_tags = {t.strip().lower(): True for t in f.read().split(",")}
+        return all(t in these_tags for t in tags)
+
+    return do_organize(args, test, folder_name)
+
+
+def organize_lowres(args):
+    folder_name = "lowres"
+    def test(txt, img):
+        pil = Image.open(img)
+        return pil.size[0] < 400 or pil.size[1] < 400
+
+    return do_organize(args, test, folder_name)
+
+
+def do_organize(args, test, folder_name):
     outpath = os.path.join(args.path, folder_name)
     # if os.path.exists(outpath):
     #     print(f"Error: Folder already exists - {outpath}")
@@ -346,23 +419,10 @@ def organize(args):
     modified = 0
     total = 0
 
-    def do_move(txt, img, outpath):
-        os.makedirs(outpath, exist_ok=True)
-        basename = os.path.splitext(os.path.basename(txt))[0]
-        img_ext = os.path.splitext(img)[1]
-        out_txt = os.path.join(outpath, basename + ".txt")
-        out_img = os.path.join(outpath, basename + img_ext)
-        # print(f"{img} -> {out_img}")
-        shutil.move(txt, out_txt)
-        shutil.move(img, out_img)
-
     for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=args.recursive))):
         img = get_caption_file_image(txt)
         if img:
-            with open(txt, "r", encoding="utf-8") as f:
-                these_tags = {t.strip().lower(): True for t in f.read().split(",")}
-
-            if all(t in these_tags for t in tags):
+            if test(txt, img):
                 do_move(txt, img, outpath)
                 modified += 1
             elif args.split_rest:
@@ -485,8 +545,12 @@ def main(args):
         return move_to_front(args)
     elif args.command == "move_categories_to_front":
         return move_categories_to_front(args)
+    elif args.command == "merge":
+        return merge(args)
     elif args.command == "organize":
         return organize(args)
+    elif args.command == "organize_lowres":
+        return organize_lowres(args)
     elif args.command == "validate":
         return validate(args)
     elif args.command == "stats":
