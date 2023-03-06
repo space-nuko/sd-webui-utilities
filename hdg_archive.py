@@ -405,7 +405,7 @@ class FiveChanDownloader(BaseDownloader):
 class EightChanDownloader(BaseDownloader):
     def __init__(self, site, board):
        super(EightChanDownloader, self).__init__(site, board)
-       self.headers["Cookie"] = "splash=1;"
+       self.headers["Cookie"] = "splash=1;disclaimer=1"
 
     def name(self):
         return f"{self.site}/{self.board}"
@@ -414,6 +414,7 @@ class EightChanDownloader(BaseDownloader):
         if page > 1:
            return None
         result = requests.get(f"{BASE_URL}/{self.board}/catalog.json", params={"page": page}, headers=self.headers)
+        result.raise_for_status()
         result = result.json()
 
         if not result:
@@ -427,6 +428,7 @@ class EightChanDownloader(BaseDownloader):
         print(f"=== THREAD: {thread_num}")
 
         resp = requests.get(f"{BASE_URL}/{self.board}/res/{thread_num}.json", headers=self.headers)
+        resp.raise_for_status()
         thread = resp.json()
 
         basepath = os.path.join(OUTPATH, str(thread_num))
@@ -436,9 +438,8 @@ class EightChanDownloader(BaseDownloader):
             print(f"!!! SKIP THREAD (not found): {thread_num}")
             return None
 
-        if resp.status_code == 200:
-           with open(os.path.join(basepath, "thread.json"), "w", encoding="utf-8") as f:
-              f.write(resp.text)
+        with open(os.path.join(basepath, "thread.json"), "w", encoding="utf-8") as f:
+           f.write(resp.text)
 
         return thread
 
