@@ -8,31 +8,38 @@ import ffmpeg
 
 parser = argparse.ArgumentParser(description='Extract frames')
 parser.add_argument('files', type=str, nargs="*", help='Files to process')
-parser.add_argument('--out', type=str, default=".", help='Output directory')
-parser.add_argument('--extract-every-secs', type=float, default=0.5, help='Extract a frame every N seconds')
+parser.add_argument('--out', '-o', type=str, default=".", help='Output directory')
+parser.add_argument('--extract-every-secs', '-e', type=float, default=0.5, help='Extract a frame every N seconds')
 
 args = parser.parse_args()
 
 OUTPATH = os.path.join(args.out, "extracted")
 
+if not args.files:
+    parser.print_help()
+    exit(1)
+
 for file in args.files:
     try:
         data = ffmpeg.probe(file)
-    except Exception as ex:
+    except ffmpeg.Error as e:
         print(f"!!! FAILED to probe: {file}")
+        print('stdout:', e.stdout.decode('utf8'))
+        print('stderr:', e.stderr.decode('utf8'))
         continue
 
     format = data["format"]
     duration = float(format["duration"])
     frames = duration / args.extract_every_secs
-    fps = 1 / frames
+    fps = eval(data["streams"][0]["r_frame_rate"])
+    fps = 1 / args.extract_every_secs
 
     outpath = os.path.join(OUTPATH, os.path.splitext(os.path.basename(file))[0])
     os.makedirs(outpath, exist_ok=True)
 
     print(f"{file}:")
     print(f"   -> {outpath}")
-    print(f"- {duration} secs, {frames} frames to extract")
+    print(f"- {duration} secs, {fps} fps, {frames} frames to extract")
 
     try:
         input = ffmpeg.input(file)

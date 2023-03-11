@@ -35,6 +35,7 @@ parser_fixup_tags = subparsers.add_parser('fixup', help='Fixup caption files, co
 parser_fixup_tags.add_argument('path', type=str, help='Path to caption files')
 
 parser_add_tags = subparsers.add_parser('add', help='Add tags to captions (delimited by commas)')
+parser_add_tags.add_argument('--if', '-i', type=str, dest='iftags', help='Only add if these tags are present (comma-separated, danbooru format)')
 parser_add_tags.add_argument('path', type=str, help='Path to caption files')
 parser_add_tags.add_argument('tags', type=str, nargs='+', help='Tags to add')
 
@@ -80,6 +81,10 @@ parser_organize_lowres = subparsers.add_parser('organize_lowres', help='Move ima
 parser_organize_lowres.add_argument('path', type=str, help='Path to caption files')
 parser_organize_lowres.add_argument('--folder-name', '-n', type=str, help='Name of subfolder')
 parser_organize_lowres.add_argument('--split-rest', '-s', action="store_true", help='Move all non-matching images into another folder')
+
+parser_backup_tags = subparsers.add_parser('backup_tags', help='Copy tags to new folder maintaining directory structure')
+parser_backup_tags.add_argument('--outpath', '-o', type=str, help='Output path')
+parser_backup_tags.add_argument('path', type=str, help='Path to caption files')
 
 args = parser.parse_args()
 
@@ -149,9 +154,15 @@ def fixup(args):
 
 
 def add(args):
-    tags = [convert_tag(t) for t in args.tags]
+    tags = args.tags
+    if args.convert_tags:
+        tags = [convert_tag(t) for t in args.tags]
     modified = 0
     total = 0
+    iftags = args.iftags.split(",")
+    if args.convert_tags:
+        iftags = [convert_tag(t) for t in iftags]
+
     for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=args.recursive))):
         found = False
         if get_caption_file_image(txt):
@@ -159,7 +170,7 @@ def add(args):
                 these_tags = [t.strip().lower() for t in f.read().split(",")]
 
             for to_add in tags:
-                if to_add not in these_tags:
+                if to_add not in these_tags and all(t in these_tags for t in iftags):
                     found = True
                     these_tags.append(to_add)
 
@@ -202,8 +213,12 @@ def remove(args):
 
 
 def replace(args):
-    to_find = convert_tag(args.to_find)
-    to_replace = convert_tag(args.to_replace)
+    if args.convert_tags:
+        to_find = convert_tag(args.to_find)
+        to_replace = convert_tag(args.to_replace)
+    else:
+        to_find = args.to_find
+        to_replace = args.to_replace
     modified = 0
     total = 0
     for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=args.recursive))):
@@ -530,6 +545,20 @@ def stats(args):
             print(("-" * (col_width - 1) + " ") * len(rows[0]))
 
 
+def backup_tags(args):
+    outpath = args.outpath or os.path.join(args.path, "backup")
+    if os.path.exists(outpath):
+        print(f"Path already exists: {outpath}")
+        return 1
+
+    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=True))):
+        if get_caption_file_image(txt):
+            rel = os.path.relpath(txt, args.path)
+            new_txt = os.path.join(outpath, rel)
+            os.makedirs(os.path.dirname(new_txt), exist_ok=True)
+            shutil.copy2(txt, new_txt)
+
+
 def main(args):
     if args.command == "fixup":
         return fixup(args)
@@ -555,6 +584,8 @@ def main(args):
         return validate(args)
     elif args.command == "stats":
         return stats(args)
+    elif args.command == "backup_tags":
+        return backup_tags(args)
     else:
         parser.print_help()
         return 1
