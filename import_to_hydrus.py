@@ -282,7 +282,7 @@ def parse_tags_from_pnginfo(params):
     return tags
 
 
-def import_path(client, path, tags=(), recursive=True, service_name="stable-diffusion-webui"):
+def import_path(client, path, service_key, tags=(), recursive=True):
     default_tags = tags
     tag_sets = collections.defaultdict(set)
     parameters = {}
@@ -294,7 +294,7 @@ def import_path(client, path, tags=(), recursive=True, service_name="stable-diff
         signal.signal(signal.SIGINT, null_handler)
 
         for tags, paths in tqdm.tqdm(tag_sets.items()):
-            results = client.add_and_tag_files(paths, tags, (service_name,))
+            results = hydrus_api.utils.add_and_tag_files(client, paths, tags, tag_service_keys=[service_key])
             for path, result in zip(paths, results):
                 status = result.get("status", 4)
 
@@ -333,6 +333,7 @@ def import_path(client, path, tags=(), recursive=True, service_name="stable-diff
             extrema = image.convert("L").getextrema()
             if extrema == (0, 0):
                 print(f"!!! SKIPPING (all black): {path}")
+                cache.add(path)
                 continue
 
         except Exception as ex:
@@ -365,14 +366,19 @@ def cmd_import(arguments, client):
             for line in f:
                 cache.add(line.strip())
 
+    service_key = client.get_service(service_name=arguments.service).get("service", {}).get("service_key", None)
+    if not service_key:
+        print(f"Unknown hydrus service: {arguments.service}")
+        exit(1)
+
     for path in arguments.paths:
         print(f"Importing {path}...")
         import_path(
             client,
             path,
+            service_key,
             arguments.tags,
             arguments.recursive,
-            arguments.service,
         )
 
     with open("hydrus_import_cache.txt", "w", encoding="utf-8") as f:
