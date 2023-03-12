@@ -86,6 +86,11 @@ parser_backup_tags = subparsers.add_parser('backup_tags', help='Copy tags to new
 parser_backup_tags.add_argument('--outpath', '-o', type=str, help='Output path')
 parser_backup_tags.add_argument('path', type=str, help='Path to caption files')
 
+parser_dedup = subparsers.add_parser('dedup', help='Deduplicate images and captions')
+parser_dedup.add_argument('--outpath', '-o', type=str, help='Output path')
+parser_dedup.add_argument('--debug', '-d', action="store_true")
+parser_dedup.add_argument('path', type=str, help='Path to caption files')
+
 args = parser.parse_args()
 
 
@@ -115,6 +120,14 @@ def get_caption_file_images(txt):
         if os.path.isfile(path):
             images.append(path)
     return images
+
+
+def get_image_file_caption(img):
+    basename = os.path.splitext(img)[0]
+    path = basename + ".txt"
+    if os.path.isfile(path):
+        return path
+    return None
 
 
 def fixup(args):
@@ -159,9 +172,12 @@ def add(args):
         tags = [convert_tag(t) for t in args.tags]
     modified = 0
     total = 0
-    iftags = args.iftags.split(",")
-    if args.convert_tags:
-        iftags = [convert_tag(t) for t in iftags]
+    if args.iftags:
+        iftags = args.iftags.split(",")
+        if args.convert_tags:
+            iftags = [convert_tag(t) for t in iftags]
+    else:
+        iftags = []
 
     for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=args.recursive))):
         found = False
@@ -559,6 +575,120 @@ def backup_tags(args):
             shutil.copy2(txt, new_txt)
 
 
+def dedup(args):
+    outpath = args.outpath or os.path.join(args.path, "duplicates")
+    if os.path.exists(outpath):
+        print(f"Path already exists: {outpath}")
+        return 1
+
+    cache_file = os.path.join(args.path, "duplicates.json")
+
+    if os.path.isfile(cache_file) and not args.debug:
+        print("Load duplicates from cache")
+        with open(cache_file, "r", encoding="utf-8") as f:
+            duplicates = json.load(f)
+    else:
+        from imagededup.methods import PHash
+        phasher = PHash(verbose=False)
+        encodings = phasher.encode_images(image_dir=args.path, recursive=args.recursive)
+        if not encodings:
+            print(f"No images found in path: {args.path}")
+            return 1
+        duplicates = phasher.find_duplicates(encoding_map=encodings, scores=args.debug)
+        print("Save duplicates to cache")
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(duplicates, f)
+
+    if args.debug:
+        from imagededup.utils import plot_duplicates
+        for imagepath, dupepaths in tqdm.tqdm(duplicates.items()):
+            if not dupepaths:
+                continue
+            print(imagepath)
+            print(dupepaths)
+            plot_duplicates(image_dir=args.path,
+                            duplicate_map=duplicates,
+                            filename=imagepath)
+        return 0
+
+    def find_largest(images):
+        largest = None
+        max_size = 0
+        for image in images:
+            filesize = os.path.getsize(image)
+            if filesize > max_size:
+                largest = image
+                max_size = filesize
+
+        assert largest is not None
+        return largest, [i for i in images if i != largest]
+
+    def find_best_caption(images):
+        best_txt = None
+        most_tags = 0
+        for image in images:
+            txt = get_image_file_caption(image)
+            if txt:
+                with open(txt, "r", encoding="utf-8") as f:
+                    split = f.read().split(",")
+                    if len(split) > most_tags:
+                        most_tags = len(split)
+                        best_txt = txt
+
+        return best_txt
+
+    total = 0
+    moved = 0
+    seen = set()
+
+    for imagepath, dupepaths in tqdm.tqdm(duplicates.items()):
+        total += 1
+
+        if not dupepaths:
+            # print("SKIPPING (no duplicates)")
+            continue
+
+        if imagepath in seen:
+            # print(f"SKIPPING (already seen): {imagepath}")
+            continue
+
+        allimages = list(filter(lambda x: x not in seen, [imagepath] + dupepaths))
+
+        if len(allimages) < 2:
+            # print("SKIPPING (no images)")
+            continue
+
+        for img in allimages:
+            seen.add(img)
+
+        allimages = [os.path.join(args.path, i) for i in allimages]
+
+        main_image, rest = find_largest(allimages)
+        caption = find_best_caption(allimages)
+        print(main_image)
+        print(rest)
+
+        if caption:
+            newcaption = os.path.splitext(main_image)[0] + ".txt"
+            if caption != newcaption:
+                print(f"copy caption: {caption} -> {newcaption}")
+                shutil.copy(caption, newcaption)
+
+        for img in rest:
+            newpath = os.path.join(outpath, os.path.dirname(os.path.relpath(img, args.path)))
+            os.makedirs(newpath, exist_ok=True)
+            print(f"move image: {img} -> {newpath}")
+            shutil.move(img, newpath)
+            txt = get_image_file_caption(img)
+            if txt:
+                print(f"move txt: {txt} -> {newpath}")
+                shutil.move(txt, newpath)
+            total += 1
+            moved += 1
+
+    print(f"Moved {moved}/{total} duplicate image files and their captions.")
+
+
 def main(args):
     if args.command == "fixup":
         return fixup(args)
@@ -586,6 +716,8 @@ def main(args):
         return stats(args)
     elif args.command == "backup_tags":
         return backup_tags(args)
+    elif args.command == "dedup":
+        return dedup(args)
     else:
         parser.print_help()
         return 1

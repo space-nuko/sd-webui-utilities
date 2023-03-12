@@ -82,12 +82,12 @@ class Interrogator:
 
         new_tags = []
         for tag in list(tags):
-            this_category = danbooru_tags.get(tag)
-            if this_category is not None:
-                this_category = this_category["tag_category"]
-                if this_category != 0:
-                    print(f"skip tag: {tag}")
-                    continue
+            # this_category = danbooru_tags.get(tag)
+            # if this_category is not None:
+            #     this_category = this_category["tag_category"]
+            #     if this_category != 0:
+            #         print(f"skip tag: {tag}")
+            #         continue
 
             new_tag = tag
 

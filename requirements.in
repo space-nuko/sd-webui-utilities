@@ -19,3 +19,4 @@ opencv-python==4.7.0.68
 scipy
 onnx
 onnxruntime-gpu
+imagededup

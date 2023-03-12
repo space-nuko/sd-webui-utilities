@@ -20,12 +20,18 @@ colorama==0.4.6
     #   tqdm
 coloredlogs==15.0.1
     # via onnxruntime-gpu
+contourpy==1.0.7
+    # via matplotlib
+cycler==0.11.0
+    # via matplotlib
 ffmpeg-python==0.2.0
     # via -r requirements.in
 filelock==3.9.0
     # via urlextract
 flatbuffers==23.3.3
     # via onnxruntime-gpu
+fonttools==4.39.0
+    # via matplotlib
 future==0.18.3
     # via ffmpeg-python
 html2text==2020.1.16
@@ -38,24 +44,36 @@ idna==3.4
     # via
     #   requests
     #   urlextract
+imagededup==0.3.1
+    # via -r requirements.in
 joblib==1.2.0
     # via
     #   nltk
     #   sacremoses
+    #   scikit-learn
+kiwisolver==1.4.4
+    # via matplotlib
 lark==1.1.5
     # via -r requirements.in
+matplotlib==3.7.1
+    # via imagededup
 mpmath==1.3.0
     # via sympy
 nltk==3.8.1
     # via textblob
 numpy==1.24.2
     # via
+    #   contourpy
+    #   matplotlib
     #   onnx
     #   onnxruntime-gpu
     #   opencv-python
     #   pandas
     #   pyarrow
+    #   pywavelets
+    #   scikit-learn
     #   scipy
+    #   torchvision
 onnx==1.13.1
     # via -r requirements.in
 onnxruntime-gpu==1.14.1
@@ -63,13 +81,19 @@ onnxruntime-gpu==1.14.1
 opencv-python==4.7.0.68
     # via -r requirements.in
 packaging==23.0
-    # via onnxruntime-gpu
+    # via
+    #   matplotlib
+    #   onnxruntime-gpu
 pandas==1.5.3
     # via -r requirements.in
 pathvalidate==2.5.2
     # via -r requirements.in
 pillow==9.4.0
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   imagededup
+    #   matplotlib
+    #   torchvision
 platformdirs==3.1.1
     # via urlextract
 protobuf==3.20.3
@@ -78,14 +102,20 @@ protobuf==3.20.3
     #   onnxruntime-gpu
 pyarrow==11.0.0
     # via -r requirements.in
+pyparsing==3.0.9
+    # via matplotlib
 pyreadline3==3.4.1
     # via humanfriendly
 python-dateutil==2.8.2
-    # via pandas
+    # via
+    #   matplotlib
+    #   pandas
 python-dotenv==1.0.0
     # via -r requirements.in
 pytz==2022.7.1
     # via pandas
+pywavelets==1.4.1
+    # via imagededup
 regex==2022.10.31
     # via
     #   nltk
@@ -94,12 +124,17 @@ requests==2.28.2
     # via
     #   -r requirements.in
     #   hydrus-api
+    #   torchvision
 sacremoses==0.0.53
     # via -r requirements.in
 safetensors==0.3.0
     # via -r requirements.in
+scikit-learn==1.2.2
+    # via imagededup
 scipy==1.10.1
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   scikit-learn
 six==1.16.0
     # via
     #   python-dateutil
@@ -110,16 +145,25 @@ sympy==1.11.1
     # via onnxruntime-gpu
 textblob==0.17.1
     # via -r requirements.in
+threadpoolctl==3.1.0
+    # via scikit-learn
 torch==1.13.1
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   imagededup
+    #   torchvision
+torchvision==0.14.1
+    # via imagededup
 tqdm==4.65.0
     # via
+    #   imagededup
     #   nltk
     #   sacremoses
 typing-extensions==4.5.0
     # via
     #   onnx
     #   torch
+    #   torchvision
 uritools==4.0.1
     # via urlextract
 urlextract==1.8.0
