@@ -32,12 +32,12 @@ List of commands (to be run like `python tagtools.py -r <command> /path/to/datas
   + You can pass multiple tags, and the images will be moved only if all the tags are found in each caption.
 - `organize_lowres` - Separates out low-resolution images from the dataset.
 - `backup_tags` - Backs up the caption files in a dataset, preserving directory structure, such that you can just merge the backup folder into the original if you make a mistake later.
-- `dedup` - A no-fills image deduplicator. Simply pass in the dataset folder and all your duplicates will be moved into a separate `duplicates` directory so you can delete them all or inspect each one by hand.
-  + This is a light wrapper around the [imagededup](https://github.com/idealo/imagededup) library.
+- `dedup` - A no-frills image deduplicator. Simply pass in the dataset folder and all your duplicates will be moved into a separate `duplicates` directory so you can delete them all or inspect each one by hand.
+  + This is a light wrapper around the [imagededup](https://github.com/idealo/imagededup) library that also handles moving the caption `.txt` files along with the duplicates.
   
 ## autotagger.py
 
-A standalone version of the [Waifu Diffusion 1.4 Tagger Extension](https://github.com/toriato/stable-diffusion-webui-wd14-tagger) for webui. I appropriated this because I found it somewhat annoying to have to start the whole webui when I just wanted to tag something.
+A standalone version of the [Waifu Diffusion 1.4 Tagger Extension](https://github.com/toriato/stable-diffusion-webui-wd14-tagger) for webui. I appropriated this because I found it somewhat annoying to have to wait a couple of minutes for the webui to start when I just wanted to autotag a dataset.
 
 Here is an example of how to run it (pass `--help` for more details):
 
@@ -49,7 +49,7 @@ This runs the autotagger at 0.35 threshold on all files in `/path/to/dataset` re
 
 ## extract_frames.py
 
-A simple ffmpeg-based frame extractor for a set of video files in a directory. Each set of extracted frames gets its own subdirectory. You'll want to run the output through `tagtools.py dedup` to prune any duplicates afterwards.
+A simple ffmpeg-based frame extractor for a set of video files in a directory. Each set of extracted frames per video gets its own subdirectory. You'll want to run the output through `tagtools.py dedup` to prune any duplicates afterwards.
 
 ## import_to_hydrus.py
 
