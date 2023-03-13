@@ -17,7 +17,7 @@ List of commands (to be run like `python tagtools.py -r <command> /path/to/datas
   + Can also pass `--if some_other_tag` to only add the tag if `some_other_tag` is already present in the caption.
 - `remove` - Removes one or more tags from all caption files in a folder.
 - `replace` - Replaces one tag with another tag in all caption files.
-- `move_to_front` - Moves the specified tags to the front of all caption files, if present. You can pass multiple tags and they will be ordered correctly at the front of each tag list.
+- `move_to_front` - Moves the specified tags to the front of all caption files, if present, for use with the `keep_tokens` feature of model finetuners. You can pass multiple tags and they will be ordered correctly at the front of each tag list.
 - `move_categories_to_front` - Moves the tags with the specified Danbooru tag categories to the front of all caption files.
   + For example, you can run `move_categories_to_front /path/to/dataset artist character`, and you will find tags will be ordered to the front like `ke-ta, komeiji koishi, komeiji satori`.
   + Depends on the file [danbooru.csv](https://github.com/arenatemp/sd-tagging-helper/blob/master/danbooru.csv)
