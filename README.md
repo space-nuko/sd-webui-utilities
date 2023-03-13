@@ -77,7 +77,9 @@ A bunch of random scrapers I've hacked together for various websites of interest
 
 ## dump_danbooru_meta.py
 
-Dumps all JSON metadata found on Danbooru for their various APIs. Yes, all of it. You'll probably need a Gold account key and many hours for this to work satisfactorily. Place your credentials in an `.env` file as `DANBOORU_LOGIN` and `DANBOORU_TOKEN`.
+Dumps all JSON metadata found on Danbooru for their various APIs. *Yes, all of it.* You'll probably need a Gold account key and many hours for this to work satisfactorily. Place your credentials in an `.env` file as `DANBOORU_LOGIN` and `DANBOORU_TOKEN`.
+
+Although, if you want to save a good deal of time, you can just see the [danbooru-metadata](https://huggingface.co/datasets/stma/danbooru-metadata) dataset for a full metadata dump from Feburary 2023.
 
 ## build_model_db.py
 
