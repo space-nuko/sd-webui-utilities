@@ -8,7 +8,7 @@ To run the scripts in this repository, you'll need to install the requirements w
 
 The big one, this is meant to be an all-in-one script for all things related to `.txt` caption sidecars next to images in your Stable Diffusion training datasets. Pass `-h` on the command line for more details like extra arguments related to each command.
 
-**Note:** In most cases you'll want to pass `-r` for recursive so that the script looks at all the images in the folder you specify recursively
+**Note:** In most cases you'll want to pass `-r` for recursive so that the script looks at all the images in the folder you specify recursively. Also, when passing tags as arguments to a command, you should use the underscored Danbooru format and separate the tags with spaces, not commas (`python tagtools.py -r add /path/to/dataset some_tag another_tag`)
 
 List of commands (to be run like `python tagtools.py -r <command> /path/to/dataset <args...>`):
 
