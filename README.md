@@ -53,6 +53,8 @@ A simple ffmpeg-based frame extractor for a set of video files in a directory. E
 
 This is a smart [Hydrus Network](https://hydrusnetwork.github.io/hydrus/index.html) importer for your Stable Diffusion outputs that contain embedded infotext. It parses the settings list for each image in such a way that you can look up the models used by webui's built-in extra networks support or the [sd-webui-additional-networks](https://github.com/kohya-ss/sd-webui-additional-networks) extension using Hyrdus' tag search. All comma-separated tokens accounting for `(emphasis syntax:1.2)`, `[prompt:editing:0.5]` and `BREAK` are parsed out as well.
 
+**Note:** Only images with the `parameters` PNG infotext will be imported by this script, this is so your Hydrus inbox won't get spammed with untagged images. Also, images that are all black are skipped by the importer.
+
 To set this up, you need to make sure your Hydrus installation has a tag service named `stable-diffusion-webui`, and put a Hydrus access key with the proper permissions into an `.env` file in this directory (or otherwise export a `HYDRUS_ACCESS_KEY` to your shell environment). Check [.env.example](./.env.example) for the format that should be followed for the `.env` file.
 
 To tag your outputs neatly by which type of image generation routine was used (`txt2img`/`img2img`, single images/grids), check the [import_all_personal.sh](./import_all_personal.sh) script for an example.
