@@ -61,7 +61,7 @@ To tag your outputs neatly by which type of image generation routine was used (`
 
 ## hdg_archive.py
 
-This script archives threads, images and catbox/litterbox files on various \*chan boards. Useful for gathering some examples of gens to learn from later. Also scoops up `.safetensors` models that anons upload to catbox and the like.
+This script archives threads, images and catbox/litterbox files on various \*chan boards and archive sites. Useful for gathering some examples of gens to learn from later. Also scoops up `.safetensors` models that anons upload to catbox and the like.
 
 For a quick and easy way to just archive everything from known boards, check out the [archive_all.sh](./archive_all.sh) script.
 
