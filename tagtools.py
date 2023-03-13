@@ -73,7 +73,7 @@ parser_stats.add_argument('path', type=str, help='Path to caption files')
 
 parser_organize = subparsers.add_parser('organize', help='Move images with specified tags (delimited by commas) into a subfolder')
 parser_organize.add_argument('path', type=str, help='Path to caption files')
-parser_organize.add_argument('tags', type=str, nargs='+', help='Tags to move')
+parser_organize.add_argument('tags', type=str, nargs='+', help='Tags to move, all tags must be present to match')
 parser_organize.add_argument('--folder-name', '-n', type=str, help='Name of subfolder')
 parser_organize.add_argument('--split-rest', '-s', action="store_true", help='Move all non-matching images into another folder')
 
@@ -88,7 +88,9 @@ parser_backup_tags.add_argument('path', type=str, help='Path to caption files')
 
 parser_dedup = subparsers.add_parser('dedup', help='Deduplicate images and captions')
 parser_dedup.add_argument('--outpath', '-o', type=str, help='Output path')
-parser_dedup.add_argument('--debug', '-d', action="store_true")
+parser_dedup.add_argument('--threshold', '-t', type=int, default=10, help="Hamming distance threshold for perceptual hasher")
+parser_dedup.add_argument('--no-cache', action="store_false", dest="cache", help="Normally a cache of the duplicated files found is saved, pass this flag to ignore it and recalculate")
+parser_dedup.add_argument('--debug', '-d', action="store_true", help="Show plots of discovered duplicate images")
 parser_dedup.add_argument('path', type=str, help='Path to caption files')
 
 args = parser.parse_args()
@@ -583,7 +585,7 @@ def dedup(args):
 
     cache_file = os.path.join(args.path, "duplicates.json")
 
-    if os.path.isfile(cache_file) and not args.debug:
+    if args.cache and not args.debug and os.path.isfile(cache_file):
         print("Load duplicates from cache")
         with open(cache_file, "r", encoding="utf-8") as f:
             duplicates = json.load(f)
@@ -594,7 +596,7 @@ def dedup(args):
         if not encodings:
             print(f"No images found in path: {args.path}")
             return 1
-        duplicates = phasher.find_duplicates(encoding_map=encodings, scores=args.debug)
+        duplicates = phasher.find_duplicates(encoding_map=encodings, scores=args.debug, max_distance_threshold=args.threshold)
         print("Save duplicates to cache")
         with open(cache_file, "w", encoding="utf-8") as f:
             json.dump(duplicates, f)
@@ -665,8 +667,6 @@ def dedup(args):
 
         main_image, rest = find_largest(allimages)
         caption = find_best_caption(allimages)
-        print(main_image)
-        print(rest)
 
         if caption:
             newcaption = os.path.splitext(main_image)[0] + ".txt"
