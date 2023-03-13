@@ -2,6 +2,8 @@
 
 This is a small repository of various Python scripts I've developed for automating things related to Stable Diffusion datasets and outputs, like scraping images and modifying caption files.
 
+To run the scripts in this repository, you'll need to install the requirements with `pip install -r requirements.txt` first.
+
 ## tagtools.py
 
 The big one, this is meant to be an all-in-one script for all things related to `.txt` caption sidecars next to images in your Stable Diffusion training datasets. Pass `-h` on the command line for more details like extra arguments related to each command.
@@ -35,7 +37,7 @@ List of commands (to be run like `python tagtools.py -r <command> /path/to/datas
   
 ## autotagger.py
 
-A standalone version of the [Waifu Diffusion 1.4 Tagger Extension](https://github.com/toriato/stable-diffusion-webui-wd14-tagger) for webui. I appropriated this because I found it somewhat annoying to have to start the whole webui just when I wanted to tag something.
+A standalone version of the [Waifu Diffusion 1.4 Tagger Extension](https://github.com/toriato/stable-diffusion-webui-wd14-tagger) for webui. I appropriated this because I found it somewhat annoying to have to start the whole webui when I just wanted to tag something.
 
 Here is an example of how to run it (pass `--help` for more details):
 
@@ -79,7 +81,7 @@ Dumps all JSON metadata found on Danbooru for their various APIs. Yes, all of it
 
 ## build_model_db.py
 
-Creates a SQLite database of all the LoRA models in the given directory. Useful for comparing training parameters between popular models, and also embeds preview images. I recommend [DB Browser for SQLite](https://github.com/sqlitebrowser/sqlitebrowser) for looking through the resulting database.
+Creates an SQLite database of all the LoRA models in the given directory. Useful for comparing training parameters between popular models, and also embeds preview images. I recommend [DB Browser for SQLite](https://github.com/sqlitebrowser/sqlitebrowser) for looking through the resulting database.
 
 ## convert_to_safe.py
 
