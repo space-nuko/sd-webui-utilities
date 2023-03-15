@@ -25,6 +25,11 @@ import re
 import shutil
 import requests
 import pandas
+import html
+
+
+DEFAULT_REPLACE_UNDERSCORE_EXCLUDES = "0_0, (o)_(o), +_+, +_-, ._., <o>_<o>, <|>_<|>, =_=, >_<, 3_3, 6_9, >_o, @_@, ^_^, o_o, u_u, x_x, |_|, ||_||"
+REPLACE_UNDERSCORE_EXCLUDES = [t.strip() for t in DEFAULT_REPLACE_UNDERSCORE_EXCLUDES.split(",")]
 
 
 parser = argparse.ArgumentParser()
@@ -32,7 +37,7 @@ parser.add_argument('--recursive', '-r', action="store_true", help='Edit caption
 subparsers = parser.add_subparsers(dest="command", help='sub-command help')
 
 parser_fixup_tags = subparsers.add_parser('fixup', help='Fixup caption files, converting from gallery-dl format and normalizing UTF-8')
-parser_fixup_tags.add_argument('path', type=str, help='Path to caption files')
+parser_fixup_tags.add_argument('paths', type=str, nargs="+", help='Paths to caption files')
 
 parser_add_tags = subparsers.add_parser('add', help='Add tags to captions (delimited by commas)')
 parser_add_tags.add_argument('--if', '-i', type=str, dest='iftags', help='Only add if these tags are present (comma-separated, danbooru format)')
@@ -89,7 +94,6 @@ parser_backup_tags.add_argument('path', type=str, help='Path to caption files')
 parser_dedup = subparsers.add_parser('dedup', help='Deduplicate images and captions')
 parser_dedup.add_argument('--outpath', '-o', type=str, help='Output path')
 parser_dedup.add_argument('--threshold', '-t', type=int, default=10, help="Hamming distance threshold for perceptual hasher")
-parser_dedup.add_argument('--no-cache', action="store_false", dest="cache", help="Normally a cache of the duplicated files found is saved, pass this flag to ignore it and recalculate")
 parser_dedup.add_argument('--debug', '-d', action="store_true", help="Show plots of discovered duplicate images")
 parser_dedup.add_argument('path', type=str, help='Path to caption files')
 
@@ -102,6 +106,8 @@ repeats_folder_re = re.compile(r'^(\d+)_(.*)$')
 
 
 def convert_tag(t):
+    if t in REPLACE_UNDERSCORE_EXCLUDES:
+        return t
     return t.replace("_", " ").replace("(", "\(").replace(")", "\)").replace("  ", " ")
 
 
@@ -133,39 +139,41 @@ def get_image_file_caption(img):
 
 
 def fixup(args):
-    # rename gallery-dl-format .txt files (<...>.png.txt, etc.)
-    renamed = 0
-    total = 0
-    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=args.recursive))):
-        m = gallery_dl_txt_re.match(txt)
-        if m:
-            basename = m.groups(1)[0]
-            print("RENAME: " + basename + ".txt")
-            shutil.move(txt, basename + ".txt")
-            renamed += 1
-        total += 1
+    for path in args.paths:
+        # rename gallery-dl-format .txt files (<...>.png.txt, etc.)
+        renamed = 0
+        total = 0
+        for txt in tqdm.tqdm(list(glob.iglob(os.path.join(path, "**/*.txt"), recursive=args.recursive))):
+            m = gallery_dl_txt_re.match(txt)
+            if m:
+                basename = m.groups(1)[0]
+                print("RENAME: " + basename + ".txt")
+                shutil.move(txt, basename + ".txt")
+                renamed += 1
+            total += 1
 
-    print(f"Renamed {renamed}/{total} caption files.")
+        print(f"Renamed {renamed}/{total} caption files.")
 
-    mpn = MosesPunctNormalizer()
+        mpn = MosesPunctNormalizer()
 
-    # join newlines, deduplicate tags, fix unicode chars, remove spaces and escape parens
-    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=args.recursive))):
-        if get_caption_file_image(txt):
-            with open(txt, "r", encoding="utf-8") as f:
-                s = f.read()
+        # join newlines, deduplicate tags, fix unicode chars, remove spaces and escape parens
+        for txt in tqdm.tqdm(list(glob.iglob(os.path.join(path, "**/*.txt"), recursive=args.recursive))):
+            if get_caption_file_image(txt):
+                with open(txt, "r", encoding="utf-8") as f:
+                    s = f.read()
 
-            s = unicodedata.normalize("NFKC", mpn.normalize(s))
-            s = ", ".join(s.split("\n"))
-            these_tags = [convert_tag(t.strip().lower()) for t in s.split(",")]
+                s = unicodedata.normalize("NFKC", mpn.normalize(s))
+                s = ", ".join(s.split("\n"))
+                these_tags = [convert_tag(t.strip().lower().replace(" ", "_")) for t in s.split(",")]
+                these_tags = [html.unescape(t) for t in these_tags] # fix for gallery-dl gelbooru downloader
 
-            fixed_tags = []
-            for i in these_tags:
-                if i not in fixed_tags:
-                    fixed_tags.append(i)
+                fixed_tags = []
+                for i in these_tags:
+                    if i not in fixed_tags:
+                        fixed_tags.append(i)
 
-            with open(txt, "w", encoding="utf-8") as f:
-                f.write(", ".join(fixed_tags))
+                with open(txt, "w", encoding="utf-8") as f:
+                    f.write(", ".join(fixed_tags))
 
 
 def add(args):
@@ -583,23 +591,13 @@ def dedup(args):
         print(f"Path already exists: {outpath}")
         return 1
 
-    cache_file = os.path.join(args.path, "duplicates.json")
-
-    if args.cache and not args.debug and os.path.isfile(cache_file):
-        print("Load duplicates from cache")
-        with open(cache_file, "r", encoding="utf-8") as f:
-            duplicates = json.load(f)
-    else:
-        from imagededup.methods import PHash
-        phasher = PHash(verbose=False)
-        encodings = phasher.encode_images(image_dir=args.path, recursive=args.recursive)
-        if not encodings:
-            print(f"No images found in path: {args.path}")
-            return 1
-        duplicates = phasher.find_duplicates(encoding_map=encodings, scores=args.debug, max_distance_threshold=args.threshold)
-        print("Save duplicates to cache")
-        with open(cache_file, "w", encoding="utf-8") as f:
-            json.dump(duplicates, f)
+    from imagededup.methods import PHash
+    phasher = PHash(verbose=False)
+    encodings = phasher.encode_images(image_dir=args.path, recursive=args.recursive)
+    if not encodings:
+        print(f"No images found in path: {args.path}")
+        return 1
+    duplicates = phasher.find_duplicates(encoding_map=encodings, scores=args.debug, max_distance_threshold=args.threshold)
 
     if args.debug:
         from imagededup.utils import plot_duplicates
@@ -654,7 +652,7 @@ def dedup(args):
             # print(f"SKIPPING (already seen): {imagepath}")
             continue
 
-        allimages = list(filter(lambda x: x not in seen, [imagepath] + dupepaths))
+        allimages = list(sorted(filter(lambda x: x not in seen, [imagepath] + dupepaths)))
 
         if len(allimages) < 2:
             # print("SKIPPING (no images)")
@@ -687,6 +685,7 @@ def dedup(args):
             moved += 1
 
     print(f"Moved {moved}/{total} duplicate image files and their captions.")
+    return 0
 
 
 def main(args):
