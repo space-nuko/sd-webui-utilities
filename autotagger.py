@@ -43,7 +43,7 @@ parser_single.add_argument('--exclude-tags', '-e', default="", type=str)
 parser_single.add_argument('--sort-alpha', '-s', default="", action="store_true")
 parser_single.add_argument('--add-confident-as-weight', '-w', action="store_true")
 parser_single.add_argument('--no-replace-underscore', action="store_false", dest="replace_underscore")
-parser_single.add_argument('--replace_underscore_excludes', default=DEFAULT_REPLACE_UNDERSCORE_EXCLUDES, type=str)
+parser_single.add_argument('--replace-underscore-excludes', default=DEFAULT_REPLACE_UNDERSCORE_EXCLUDES, type=str)
 parser_single.add_argument('--no-escape-tag', action="store_false", dest="escape_tag")
 
 parser_batch = subparsers.add_parser('batch', help='Batch autotag images')
@@ -206,6 +206,9 @@ def interrogate_batch(
             # just in case, user has mysterious file...
             print(f'${path} is not supported image type')
             return
+        except Exception as ex:
+            print(f"failed to open {path}: {ex}")
+            return
 
         # guess the output path
         base_dir_last = Path(base_dir).parts[-1]
@@ -282,7 +285,7 @@ def interrogate_batch(
             )
 
     p = Pool(processes=args.process_count)
-    pb = tqdm.tqdm(paths)
+    pb = tqdm.tqdm(paths, total=len(paths))
     for res in p.imap_unordered(worker, pb):
         pb.update()
         pass
@@ -332,6 +335,7 @@ def main(args):
             args.replace_underscore,
             args.replace_underscore_excludes,
             args.escape_tag)
+        return 0
     else:
         parser.print_help()
         return 1

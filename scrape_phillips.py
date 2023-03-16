@@ -17,6 +17,7 @@ HEADERS = {
 
 
 def worker(lot):
+    found = False
     for image in lot["lotImages"]:
         url = urllib.parse.urljoin("https://assets.phillips.com/image/upload/v1", image["imagePath"])
         path = sanitize_filepath(os.path.join("phillips", artist, os.path.basename(url)))
@@ -25,8 +26,8 @@ def worker(lot):
         if os.path.exists(path):
             print("*** SKIPPING (exists): " + path)
         else:
+            found = True
             resp = requests.get(url)
-            print(url)
             if resp.status_code != 200:
                 print(f"!!! FAILED saving: {url}")
                 return
@@ -36,14 +37,15 @@ def worker(lot):
                     f.write(chunk)
 
         artist_name = lot["makerName"].replace(",", "")
-        txt_name = os.path.splitext(os.path.basename(path))[0] + ".txt"
-        txt_path = os.path.join(os.path.dirname(path), txt_name)
         title = lot["description"]
         year = lot["circa"]
         txt = f"{artist_name}, {title}, {year}"
 
+        txt_name = os.path.splitext(os.path.basename(path))[0] + ".txt"
+        txt_path = os.path.join(os.path.dirname(path), txt_name)
         with open(txt_path, "w", encoding="utf-8") as f:
             f.write(txt)
+    return found
 
 
 no = 1
@@ -60,10 +62,15 @@ while True:
         print("Finished.")
         exit(0)
 
+    found = False
     p = Pool(processes=8)
     for res in p.imap_unordered(worker, resp["data"]):
-        pass
+        found = found or res
     p.close()
     p.join()
 
     no += 1
+
+    if not found:
+        print("Finished.")
+        break

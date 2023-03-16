@@ -37,7 +37,7 @@ List of commands (to be run like `python tagtools.py -r <command> /path/to/datas
   
 ## autotagger.py
 
-A standalone version of the [Waifu Diffusion 1.4 Tagger Extension](https://github.com/toriato/stable-diffusion-webui-wd14-tagger) for webui. I appropriated this because I found it somewhat annoying to have to wait a couple of minutes for the webui to start when I just wanted to autotag a dataset.
+A standalone version of the [Waifu Diffusion 1.4 Tagger Extension](https://github.com/toriato/stable-diffusion-webui-wd14-tagger) for webui, with added multithreading support. I appropriated this because I found it somewhat annoying to have to wait a couple of minutes for the webui to start when I just wanted to autotag a dataset.
 
 Here is an example of how to run it (pass `--help` for more details):
 

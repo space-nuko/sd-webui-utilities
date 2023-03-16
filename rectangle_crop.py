@@ -159,11 +159,9 @@ def cut_of_bottom(image, pixel):
 IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif"]
 
 for ext in IMAGE_EXTS:
-    for img in tqdm.tqdm(list(glob.iglob(os.path.join(dir, f"**{ext}"), recursive=True))):
+    for img in tqdm.tqdm(list(glob.iglob(os.path.join(dir, f"*{ext}")))):
         file_name_ext = os.path.basename(img)
         file_name, file_extension = os.path.splitext(file_name_ext)
-        if file_name.endswith(".cropped"):
-            continue
 
         image = cv2.imread(img)
 
@@ -175,13 +173,13 @@ for ext in IMAGE_EXTS:
 
         image = detect_box(image, True)
 
-        path_out = os.path.join(os.path.dirname(img), "out")
+        path_out = os.path.join(os.path.dirname(img), "cropped")
         # Create out path
         if not os.path.exists(path_out):
             os.makedirs(path_out)
 
         # Build output file path
-        file_path = os.path.join(path_out, file_name + '.cropped' + file_extension)
+        file_path = os.path.join(path_out, file_name + file_extension)
 
         # Write out file
         cv2.imwrite(file_path, image)
