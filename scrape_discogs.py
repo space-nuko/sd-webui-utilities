@@ -23,6 +23,7 @@ HEADERS = {
 }
 
 re_year = re.compile(r' *\([0-9]+\)$')
+re_suffix = re.compile(r'([0-9]+-[a-z0-9_]+)\.[a-z]+$')
 
 def sanitize_name(name):
     name = name.replace(",", "")
@@ -32,9 +33,25 @@ def scrape_list(discogs, arguments):
     l = discogs.list(arguments.id)
     print(f"Saving list: {l.id} - {l.name}")
 
+    outpath = os.path.join(arguments.output_path, "discogs")
+    outdir = os.path.join(outpath, f"{l.id}")
+
+    exist = set()
+    if os.path.exists(outdir):
+        files = os.listdir(outdir)
+        for file in files:
+            m = re_suffix.search(file)
+            if m:
+                exist.add(m.group(1))
+
     for item in l.items:
-        ty = item.type
         id = item.id
+        ty = item.type
+
+        if f"{id}-{ty}" in exist:
+            print(f"*** SKIPPING (exists): {id} ({ty})")
+            continue
+
         if ty == "master":
             release = discogs.master(id).main_release
         else:
@@ -80,12 +97,12 @@ def scrape_list(discogs, arguments):
                     tags.append(extraartist.name)
 
             uri = primary_image["uri"]
-            file_basename = f"{release.year}-{release.artists_sort}-{release.title}-{id}".replace("/", "-")
+            file_basename = f"{release.year}-{release.artists_sort}-{release.title}-{id}-{ty}".replace("/", "-")
             basename = sanitize_filepath(os.path.join(f"{l.id}", file_basename))
             tags = [t.replace("/", "-").replace("\\", "-") for t in tags]
             txt = ", ".join(tags)
-            outpath = os.path.join(arguments.output_path, "discogs")
             image_path = os.path.join(outpath, f"{basename}{os.path.splitext(uri)[1]}")
+
 
             if os.path.exists(image_path):
                 print(f"*** SKIPPING (file exists): {image_path}")
@@ -94,7 +111,7 @@ def scrape_list(discogs, arguments):
                 if resp.status_code != 200:
                     print(f"!!! FAILED saving: {uri}")
                     continue
-                print("Saving: " + uri)
+                print("Saving: " + image_path)
                 os.makedirs(os.path.dirname(image_path), exist_ok=True)
                 with open(image_path, "wb") as f:
                     for chunk in resp:
