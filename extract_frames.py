@@ -34,7 +34,8 @@ for file in args.files:
     fps = eval(data["streams"][0]["r_frame_rate"])
     fps = 1 / args.extract_every_secs
 
-    outpath = os.path.join(OUTPATH, os.path.splitext(os.path.basename(file))[0])
+    basename = os.path.splitext(os.path.basename(file))[0]
+    outpath = os.path.join(OUTPATH, basename)
     os.makedirs(outpath, exist_ok=True)
 
     print(f"{file}:")
@@ -44,7 +45,7 @@ for file in args.files:
     try:
         input = ffmpeg.input(file)
         input.filter('fps', fps=fps) \
-             .output(os.path.join(outpath, "%d.png"),
+             .output(os.path.join(outpath, f"{basename}_%d.png"),
                      #video_bitrate='5000k',
                      #s='64x64',
                      sws_flags='bilinear',
