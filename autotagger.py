@@ -48,7 +48,7 @@ parser_single.add_argument('--no-escape-tag', action="store_false", dest="escape
 
 parser_batch = subparsers.add_parser('batch', help='Batch autotag images')
 parser_batch.add_argument('input_path', type=str, help='Path to images')
-parser_batch.add_argument('--process-count', '-p', default=8, type=int, help="Number of threads for batch tagging")
+parser_batch.add_argument('--process-count', '-p', default=4, type=int, help="Number of threads for batch tagging")
 parser_batch.add_argument('--interrogator', '-i', default="wd14-swinv2-v2-git", type=str)
 parser_batch.add_argument('--recursive', '-r', action="store_true")
 parser_batch.add_argument('--output-path', '-o', type=str, default="")
@@ -238,7 +238,7 @@ def interrogate_batch(
         output = []
 
         if output_path.is_file():
-            output.append(output_path.read_text(errors='ignore').strip())
+            output.append(output_path.read_text(errors='ignore', encoding="utf-8").strip())
 
             if batch_options.output_action_on_conflict == 'ignore':
                 print(f'skipping {path}')
