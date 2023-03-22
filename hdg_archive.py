@@ -4,7 +4,7 @@
 # Searches for archived threads on /h/ with "https://rentry.org/voldy" in the OP
 # and downloads all images/catbox files from them
 #
-# Dependencies: pip install requests pathvalidate urlextract beautifulsoup4 dateutil
+# Dependencies: pip install -r requirements.txt
 #
 # Usage: python hdg_archive.py [output folder] [--board h] [--process-count 8] [--catbox-only] [--images-only] [--ignore-deleted]
 #

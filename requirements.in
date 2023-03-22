@@ -2,6 +2,7 @@ requests
 pathvalidate
 urlextract
 torch
+python-dateutil
 safetensors
 beautifulsoup4
 ffmpeg-python
