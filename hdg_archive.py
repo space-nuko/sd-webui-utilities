@@ -44,6 +44,7 @@ parser.add_argument('--images-only', action='store_true', help='Only download im
 parser.add_argument('--ignore-deleted', action='store_true', help='Ignore deleted posts')
 parser.add_argument('--num-threads', '-n', type=int, default=None, help='Archive only the N most recent threads')
 parser.add_argument('--sanitize-filepaths', action='store_true', help='Strip non-ASCII characters from output filepaths')
+parser.add_argument('--thread-no', '-t', type=str, help='Single thread number, for use with --board')
 
 
 args = parser.parse_args()
@@ -98,7 +99,7 @@ class BaseDownloader():
     def get_posts(self, page):
         pass
 
-    def get_thread(self, post):
+    def get_thread(self, post=None, id=None):
         pass
 
     def download_op_media(self, thread):
@@ -125,10 +126,8 @@ class FoolFuukaDownloader(BaseDownloader):
         posts = filter(lambda p: p["op"] == "1" and p["board"]["shortname"] == args.board, result["0"]["posts"])
         return posts
 
-    def get_thread(self, post):
-        thread_num = post["thread_num"]
-        print(thread_num)
-        print(post["num"])
+    def get_thread(self, post=None, id=None):
+        thread_num = id if id else post["thread_num"]
 
         print(f"=== THREAD: {thread_num}")
 
@@ -334,8 +333,12 @@ class FiveChanDownloader(BaseDownloader):
 
         return pages
 
-    def get_thread(self, post):
-       link, page = post
+    def get_thread(self, post=None, id=None):
+       if post:
+          link, page = post
+       else:
+          link = f"https://fate.5ch.net/test/read.cgi/{args.board}/{id}"
+          page = None
 
        r = re.compile(r'liveuranus/(\d*)')
        thread_num = r.search(link).groups(1)[0]
@@ -422,8 +425,8 @@ class EightChanDownloader(BaseDownloader):
 
         return result
 
-    def get_thread(self, post):
-        thread_num = post["threadId"]
+    def get_thread(self, post=None, id=None):
+        thread_num = id if id else post["threadId"]
 
         print(f"=== THREAD: {thread_num}")
 
@@ -554,8 +557,8 @@ class WarosuDownloader(BaseDownloader):
 
         return replies
 
-    def get_thread(self, post):
-        thread_num = post["id"].replace("p", "")
+    def get_thread(self, post=None, id=None):
+        thread_num = id if id else post["id"].replace("p", "")
         print(thread_num)
 
         print(f"=== THREAD: {thread_num}")
@@ -729,49 +732,72 @@ os.makedirs(OUTPATH, exist_ok=True)
 print(f"Saving files in /{downloader.name()} to {OUTPATH}...")
 
 
-threads = 0
+def download_thread(thread):
+      links = downloader.extract_links(thread)
+      if not links:
+         print("!!! SKIPPING (no links)")
+         return False
 
+      print(f"+++ {len(links)} links to download.")
 
-while True:
-    print(f"*** Page {page} ***")
+      original_sigint = signal.getsignal(signal.SIGINT)
 
-    posts = downloader.get_posts(page)
-    if posts is None:
-        print("Finished")
-        break
+      p = Pool(processes=max(1, args.process_count))
+      signal.signal(signal.SIGINT, signal_handler)
 
-    for post in posts:
-        thread = downloader.get_thread(post)
-        if not thread:
-            continue
-
-        links = downloader.extract_links(thread)
-        if not links:
-           print("!!! SKIPPING (no links)")
-           continue
-
-        print(f"+++ {len(links)} links to download.")
-
-        original_sigint = signal.getsignal(signal.SIGINT)
-
-        p = Pool(processes=max(1, args.process_count))
-        signal.signal(signal.SIGINT, signal_handler)
-
-        for res in p.imap_unordered(worker, links):
+      for res in p.imap_unordered(worker, links):
             if not g_run_loops:
-                p.close()
-                p.join()
-                print("Interrupted, exiting")
-                exit(1)
+               p.close()
+               p.join()
+               print("Interrupted, exiting")
+               exit(1)
 
-        p.close()
-        p.join()
-        signal.signal(signal.SIGINT, original_sigint)
+      p.close()
+      p.join()
+      signal.signal(signal.SIGINT, original_sigint)
 
-        threads += 1
+      return True
 
-        if args.num_threads and threads >= args.num_threads:
-           print(f"Finished archiving latest {args.num_threads}.")
-           exit(0)
 
-    page += 1
+def archive_multiple():
+   global page
+   threads = 0
+   while True:
+      print(f"*** Page {page} ***")
+
+      posts = downloader.get_posts(page)
+      if posts is None:
+         print("Finished")
+         return
+
+      for post in posts:
+         thread = downloader.get_thread(post)
+         if not thread:
+               continue
+
+         if download_thread(thread):
+            threads += 1
+
+         if args.num_threads and threads >= args.num_threads:
+            print(f"Finished archiving latest {args.num_threads}.")
+            exit(0)
+
+      page += 1
+
+
+def archive_single():
+   thread = downloader.get_thread(id=args.thread_no)
+   if not thread:
+      print(f"Thread not found: {args.thread_no}")
+      exit(1)
+
+   if not download_thread(thread):
+      exit(1)
+
+   print(f"Downloaded thread {args.thread_no}")
+
+
+if args.thread_no:
+   archive_single()
+else:
+   archive_multiple()
