@@ -24,8 +24,15 @@ HEADERS = {
 def worker(item):
     resp = requests.get(urljoin("https://www.artnet.com", item["ImgHref"]), headers=HEADERS)
     page = BeautifulSoup(resp.text, features="html5lib")
-    imgArea = page.find(id="imgArea").find("img")
-    url = "https:" + imgArea.get("src")
+    imgArea = page.find(id="imgArea")
+    if not imgArea:
+        print(f"*** SKIPPING (no images): {item['ImgHref']}")
+        return
+    img = imgArea.find("img")
+    if not img:
+        print(f"*** SKIPPING (no images): {item['ImgHref']}")
+        return
+    url = "https:" + img.get("src")
 
     path = sanitize_filepath(os.path.join("artnet", artist, os.path.basename(url)))
     os.makedirs(os.path.dirname(path), exist_ok=True)
