@@ -117,7 +117,7 @@ class FoolFuukaDownloader(BaseDownloader):
         return f"{self.site}/{self.board}"
 
     def get_posts(self, page):
-        result = requests.get(BASE_URL + "/_/api/chan/search/", params={"board": args.board, "text": "https://rentry.org/voldy", "page": page}, headers=self.headers)
+        result = requests.get(BASE_URL + "/_/api/chan/search/", params={"board": args.board, "text": "https://rentry.org/nai-speedrun", "page": page}, headers=self.headers)
         result = result.json()
 
         if "0" not in result:
