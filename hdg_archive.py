@@ -299,7 +299,10 @@ class FiveChanDownloader(BaseDownloader):
            link = links.pop()
            resp = requests.get(link, headers=self.headers)
            page = BeautifulSoup(resp.text, features="html5lib")
-           page_title = page.find("h1", class_="title").text.strip()
+           page_title = page.find("h1", class_="title")
+           if not page_title:
+              print(f"SKIPPING THREAD (no title): {page_title} (link)")
+           page_title = page_title.text.strip()
            if self.query not in page_title and "なんJnove" not in page_title:
               print(f"SKIPPING THREAD (unrelated): {page_title} (link)")
               continue
@@ -362,6 +365,9 @@ class FiveChanDownloader(BaseDownloader):
         r = re.compile(r'liveuranus/(\d*)')
         thread_num = r.search(url).groups(1)[0]
         basepath = os.path.join(OUTPATH, thread_num)
+        if not page:
+           print(f"!!! SKIPPING (no page): {url}")
+           return []
         thread = page.find("div", class_="thread")
 
         links = []

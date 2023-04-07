@@ -87,6 +87,11 @@ parser_organize_lowres.add_argument('path', type=str, help='Path to caption file
 parser_organize_lowres.add_argument('--folder-name', '-n', type=str, help='Name of subfolder')
 parser_organize_lowres.add_argument('--split-rest', '-s', action="store_true", help='Move all non-matching images into another folder')
 
+parser_organize_overtagged = subparsers.add_parser('organize_overtagged', help='Move overtagged images a subfolder')
+parser_organize_overtagged.add_argument('path', type=str, help='Path to caption files')
+parser_organize_overtagged.add_argument('--folder-name', '-n', type=str, help='Name of subfolder')
+parser_organize_overtagged.add_argument('--split-rest', '-s', action="store_true", help='Move all non-matching images into another folder')
+
 parser_backup_tags = subparsers.add_parser('backup_tags', help='Copy tags to new folder maintaining directory structure')
 parser_backup_tags.add_argument('--outpath', '-o', type=str, help='Output path')
 parser_backup_tags.add_argument('path', type=str, help='Path to caption files')
@@ -445,6 +450,15 @@ def organize_lowres(args):
     return do_organize(args, test, folder_name)
 
 
+def organize_overtagged(args):
+    folder_name = "overtagged"
+    def test(txt, img):
+        with open(txt, "r", encoding="utf-8") as f:
+            return len(f.read()) > 1024
+
+    return do_organize(args, test, folder_name)
+
+
 def do_organize(args, test, folder_name):
     outpath = os.path.join(args.path, folder_name)
     # if os.path.exists(outpath):
@@ -709,6 +723,8 @@ def main(args):
         return organize(args)
     elif args.command == "organize_lowres":
         return organize_lowres(args)
+    elif args.command == "organize_overtagged":
+        return organize_overtagged(args)
     elif args.command == "validate":
         return validate(args)
     elif args.command == "stats":

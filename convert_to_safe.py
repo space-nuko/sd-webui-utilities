@@ -18,27 +18,35 @@ from safetensors.torch import save_file
 exts = [".ckpt", ".pt"]
 
 path = sys.argv[1]
-if not os.path.isdir(path):
+if os.path.isdir(path):
+    files = []
+    for ext in exts:
+        files += list(glob.iglob(f"{path}/**/*{ext}", recursive=True))
+elif os.path.isfile(path):
+    ext = os.path.splitext(path)[1]
+    if ext not in exts:
+        print(f"Invalid file {path}")
+        exit(1)
+    files = [path]
+else:
     print(f"Invalid path {path}")
     exit(1)
 
-for ext in exts:
-    files = glob.iglob(f"{path}/**/*{ext}", recursive=True)
-    for f in files:
-        print(f'Loading {f}...')
-        fn = f"{f.replace(ext, '')}.safetensors"
+for f in files:
+    print(f'Loading {f}...')
+    fn = f"{f.replace(ext, '')}.safetensors"
 
-        if os.path.isfile(fn):
-            print(f'Skipping, as {fn} already exists.')
-            continue
+    if os.path.isfile(fn):
+        print(f'Skipping, as {fn} already exists.')
+        continue
 
-        try:
-            with torch.no_grad():
-                weights = torch.load(f)
-                fn = f"{f.replace(ext, '')}.safetensors"
-                print(f'Saving {fn}...')
-                save_file(weights, fn)
-        except Exception as ex:
-            print(f'ERROR converting {f}: {ex}')
+    try:
+        with torch.no_grad():
+            weights = torch.load(f)
+            fn = f"{f.replace(ext, '')}.safetensors"
+            print(f'Saving {fn}...')
+            save_file(weights, fn)
+    except Exception as ex:
+        print(f'ERROR converting {f}: {ex}')
 
 print('Done!')

@@ -5,6 +5,7 @@ import safetensors
 import json
 import mmap
 import pprint
+from collections import OrderedDict
 
 model_path = sys.argv[1]
 if not model_path:
@@ -12,15 +13,39 @@ if not model_path:
     exit(1)
 
 
+large_metadata = ["ss_dataset_dirs", "ss_tag_frequency", "ss_bucket_info"]
+no_large = True
+
+
 def read_metadata(filename):
-    """Reads the JSON metadata from a .safetensors file"""
-    with open(filename, mode="r", encoding="utf8") as file_obj:
-        with mmap.mmap(file_obj.fileno(), length=0, access=mmap.ACCESS_READ) as m:
-            header = m.read(8)
-            n = int.from_bytes(header, "little")
-            metadata_bytes = m.read(n)
-            metadata = json.loads(metadata_bytes)
+    with open(filename, mode="rb") as file:
+        metadata_len = file.read(8)
+        metadata_len = int.from_bytes(metadata_len, "little")
+        json_start = file.read(2)
 
-    return metadata.get("__metadata__", {})
+        assert metadata_len > 2 and json_start in (b'{"', b"{'"), f"{filename} is not a safetensors file"
+        json_data = json_start + file.read(metadata_len-2)
+        json_obj = json.loads(json_data)
 
-pprint.pp(read_metadata(model_path))
+        res = {}
+        for k, v in json_obj.get("__metadata__", {}).items():
+            res[k] = v
+            if isinstance(v, str) and v[0:1] == '{':
+                try:
+                    res[k] = json.loads(v)
+                except Exception as e:
+                    pass
+
+        if no_large:
+            for k in large_metadata:
+                res.pop(k, None)
+
+        ordered = OrderedDict()
+        for k in sorted(res.keys()):
+            ordered[k] = res[k]
+
+        return ordered
+
+meta = read_metadata(model_path)
+for k, v in meta.items():
+    print(f"{k}: {v}")
