@@ -5,16 +5,25 @@ import safetensors
 import json
 import mmap
 import pprint
+import argparse
 from collections import OrderedDict
+import itertools
 
-model_path = sys.argv[1]
+parser = argparse.ArgumentParser()
+parser.add_argument("--tag-frequency", "-t", action="store_true")
+parser.add_argument("--max-tags", "-m", type=int, default=20)
+parser.add_argument("--show-large", "-l", action="store_true")
+parser.add_argument("model_path")
+args = parser.parse_args()
+
+model_path = args.model_path
 if not model_path:
     print("Provide a model path.")
     exit(1)
 
 
 large_metadata = ["ss_dataset_dirs", "ss_tag_frequency", "ss_bucket_info"]
-no_large = True
+no_large = not args.show_large
 
 
 def read_metadata(filename):
@@ -36,10 +45,6 @@ def read_metadata(filename):
                 except Exception as e:
                     pass
 
-        if no_large:
-            for k in large_metadata:
-                res.pop(k, None)
-
         ordered = OrderedDict()
         for k in sorted(res.keys()):
             ordered[k] = res[k]
@@ -47,5 +52,20 @@ def read_metadata(filename):
         return ordered
 
 meta = read_metadata(model_path)
-for k, v in meta.items():
-    print(f"{k}: {v}")
+
+if args.tag_frequency:
+    tag_frequency = meta.get("ss_tag_frequency", None)
+    if tag_frequency is None:
+        print("No tag frequency found.")
+    else:
+        for k, v in tag_frequency.items():
+            ordered = sorted([(tk, tv) for tk, tv in v.items()], key=lambda t: t[1], reverse=True)
+            if args.max_tags > 0:
+                ordered = itertools.islice(ordered, args.max_tags)
+            print(f"- {k}:")
+            for tk, tv in ordered:
+                print(f"    {tk.strip()}: {tv}")
+else:
+    for k, v in meta.items():
+        if args.show_large or k not in large_metadata:
+            print(f"{k}: {v}")
