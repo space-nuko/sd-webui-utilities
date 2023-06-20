@@ -22,14 +22,18 @@ for site in os.listdir(args.path):
     for board in os.listdir(bp):
         bp2 = os.path.join(bp, board)
         i = 0
-        threads = sorted(os.listdir(bp2), key=int, reverse=True)
-        for thread in threads:
-            mega = os.path.join(bp2, thread, "mega.txt")
-            if os.path.isfile(mega):
-                txts.append(mega)
-                i += 1
-                if i > args.num_threads:
-                    break
+        try:
+            threads = sorted(os.listdir(bp2), key=int, reverse=True)
+            for thread in threads:
+                mega = os.path.join(bp2, thread, "mega.txt")
+                if os.path.isfile(mega):
+                    txts.append(mega)
+                    i += 1
+                    if i > args.num_threads:
+                        break
+        except Exception as ex:
+            print(ex)
+            break
 
 
 folder_re = re.compile(r'^(http.*/folder/.*)/(folder|file)/.*') # strip mega subfolders
