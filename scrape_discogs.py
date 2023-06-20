@@ -63,7 +63,7 @@ def download_release_images(discogs, arguments, release, outpath, suffix):
                 tags.append(style)
 
         for label in release.labels:
-            label = label["name"].replace(",", "")
+            label = label.name.replace(",", "")
             tags.append(label)
 
         decade = 0
@@ -84,7 +84,7 @@ def download_release_images(discogs, arguments, release, outpath, suffix):
         image_path = f"{basename}{os.path.splitext(uri)[1]}"
 
         tries = 0
-        MAX_TRIES = 10
+        MAX_TRIES = 100
 
         while True:
             if os.path.exists(image_path):
