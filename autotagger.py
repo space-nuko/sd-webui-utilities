@@ -48,7 +48,7 @@ parser_single.add_argument('--no-escape-tag', action="store_false", dest="escape
 
 parser_batch = subparsers.add_parser('batch', help='Batch autotag images')
 parser_batch.add_argument('input_path', type=str, help='Path to images')
-parser_batch.add_argument('--process-count', '-p', default=4, type=int, help="Number of threads for batch tagging")
+parser_batch.add_argument('--process-count', '-p', default=2, type=int, help="Number of threads for batch tagging")
 parser_batch.add_argument('--interrogator', '-i', default="wd14-swinv2-v2-git", type=str)
 parser_batch.add_argument('--recursive', '-r', action="store_true")
 parser_batch.add_argument('--output-path', '-o', type=str, default="")
