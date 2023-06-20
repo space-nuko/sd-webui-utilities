@@ -25,6 +25,7 @@ import re
 import dotenv
 import tqdm
 import signal
+import json
 from PIL import Image
 from pprint import pp
 import prompt_parser
@@ -174,6 +175,49 @@ def strip_template_info(settings) -> str:
             settings.split(split_by)[0].strip()
         )
     return settings
+
+
+def parse_comfyui_prompt(prompt):
+    graph = json.loads(prompt)
+
+    prompts = {id: n for id, n in graph.items() if n["class_type"] == "CLIPTextEncode" and "text" in n["inputs"]}
+    ksamplers = [(id, n) for id, n in graph.items() if "KSampler" in n["class_type"]]
+
+    positive = None
+    negative = None
+
+    for id, ks in ksamplers:
+        id_pos = ks["inputs"]["positive"][0]
+        id_neg = ks["inputs"]["negative"][0]
+
+        if id_pos in prompts and id_neg in prompts:
+            positive = prompts[id_pos]["inputs"]["text"]
+            negative = prompts[id_neg]["inputs"]["text"]
+            break
+
+    if positive is None:
+        return set()
+
+    tokens = set()
+    settings = [] # TODO
+
+    ts = prompt_parser.parse_prompt_attention(positive)
+    full_line = ""
+    for token, weight in ts:
+        full_line += token + ","
+    all_tokens = get_tokens(full_line.lower())
+    tokens.update(all_tokens)
+
+    all_tokens = list(tokens) + settings
+    tags = [t for t in all_tokens if t]
+    if negative:
+        tags += ["negative:" + negative]
+
+    tags = set(tags)
+    # for r in to_remove:
+    #     tags.remove(r)
+
+    return tags
 
 
 def parse_tags_from_pnginfo(params):
@@ -340,15 +384,23 @@ def import_path(client, path, service_key, tags=(), recursive=True):
             print(f"!!! FAILED to open: {path} ({ex})")
             continue
 
-        if "parameters" not in image.info:
-            #print(f"!!! SKIPPING (no parameters): {path}")
+        if "parameters" in image.info: # A1111
+            prompt_type = "a1111"
+            params = image.info["parameters"]
+            tags = parse_tags_from_pnginfo(params)
+        elif "prompt" in image.info: # ComfyUI
+            prompt_type = "comfyui"
+            params = image.info["prompt"]
+            tags = parse_comfyui_prompt(params)
+            if tags is None:
+                continue
+        else:
             continue
 
-        params = image.info["parameters"]
-        tags = parse_tags_from_pnginfo(params)
         tags.update(default_tags)
+        tags.add(f"prompt_type:{prompt_type}")
         tag_sets[tuple(sorted(tags))].add(realpath)
-        parameters[realpath] = image.info["parameters"]
+        parameters[realpath] = params
 
         i += 1
         if i >= 100:
