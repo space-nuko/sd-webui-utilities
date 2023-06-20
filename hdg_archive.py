@@ -302,6 +302,7 @@ class FiveChanDownloader(BaseDownloader):
            page_title = page.find("h1", class_="title")
            if not page_title:
               print(f"SKIPPING THREAD (no title): {page_title} (link)")
+              continue
            page_title = page_title.text.strip()
            if self.query not in page_title and "なんJnove" not in page_title:
               print(f"SKIPPING THREAD (unrelated): {page_title} (link)")
@@ -414,7 +415,7 @@ class FiveChanDownloader(BaseDownloader):
 class EightChanDownloader(BaseDownloader):
     def __init__(self, site, board):
        super(EightChanDownloader, self).__init__(site, board)
-       self.headers["Cookie"] = "splash=1;disclaimer=1"
+       self.headers["Cookie"] = "splash=1;disclaimer=1;disclaimer2=1"
 
     def name(self):
         return f"{self.site}/{self.board}"
