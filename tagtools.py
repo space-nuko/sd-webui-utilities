@@ -62,6 +62,10 @@ parser_move_categories_to_front = subparsers.add_parser('move_categories_to_fron
 parser_move_categories_to_front.add_argument('path', type=str, help='Path to caption files')
 parser_move_categories_to_front.add_argument('categories', type=str, nargs='+', help='Categories to move')
 
+parser_strip_categories = subparsers.add_parser('strip_categories', help='Strips tags matching a Danbooru tag category')
+parser_strip_categories.add_argument('path', type=str, help='Path to caption files')
+parser_strip_categories.add_argument('categories', type=str, nargs='+', help='Categories of tags to remove')
+
 parser_merge = subparsers.add_parser('merge', help='Merge two directories of caption files based on filenames')
 parser_merge.add_argument('target_path', type=str, help='Path with caption files to edit')
 parser_merge.add_argument('to_merge', type=str, help='Path with caption files to merge')
@@ -374,6 +378,53 @@ def move_categories_to_front(args):
                         if tag_category == this_category:
                             found = True
                             these_tags.insert(0, these_tags.pop(these_tags.index(t)))
+
+            these_tags = [convert_tag(t) for t in these_tags]
+
+            with open(txt, "w", encoding="utf-8") as f:
+                f.write(", ".join(these_tags))
+
+            if found:
+                modified += 1
+            total += 1
+
+    print(f"Updated {modified}/{total} caption files.")
+
+
+def strip_categories(args):
+    if not os.path.isfile("danbooru.csv"):
+        print("Downloading danbooru.csv tags list...")
+        url = "https://github.com/arenatemp/sd-tagging-helper/raw/master/danbooru.csv"
+        response = requests.get(url, stream=True)
+        with open("danbooru.csv", "wb") as handle:
+            for data in tqdm.tqdm(response.iter_content()):
+                handle.write(data)
+
+    print("Loading danbooru.csv tags list...")
+    danbooru_tags = pandas.read_csv("danbooru.csv", engine="pyarrow").set_axis(["tag", "tag_category"], axis=1).set_index("tag").to_dict("index")
+    order = [CATEGORIES[cat] for cat in reversed(args.categories)]
+    print("Done.")
+
+    modified = 0
+    total = 0
+    for txt in tqdm.tqdm(list(glob.iglob(os.path.join(args.path, "**/*.txt"), recursive=args.recursive))):
+        found = False
+        if get_caption_file_image(txt):
+            with open(txt, "r", encoding="utf-8") as f:
+                these_tags = list(sorted(to_danbooru_tag(t) for t in f.read().split(",")))
+
+            def has_tag_category(t, cat):
+                nonlocal found
+                this_category = danbooru_tags.get(t)
+                if this_category is not None:
+                    this_category = this_category["tag_category"]
+                    if cat == this_category:
+                        found = True
+                        return True
+                return False
+
+            for tag_category in order:
+                these_tags = [t for t in these_tags if not has_tag_category(t, tag_category)]
 
             these_tags = [convert_tag(t) for t in these_tags]
 
@@ -717,6 +768,8 @@ def main(args):
         return move_to_front(args)
     elif args.command == "move_categories_to_front":
         return move_categories_to_front(args)
+    elif args.command == "strip_categories":
+        return strip_categories(args)
     elif args.command == "merge":
         return merge(args)
     elif args.command == "organize":
