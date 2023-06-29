@@ -415,7 +415,11 @@ class FiveChanDownloader(BaseDownloader):
 class EightChanDownloader(BaseDownloader):
     def __init__(self, site, board):
        super(EightChanDownloader, self).__init__(site, board)
-       self.headers["Cookie"] = "splash=1;disclaimer=1;disclaimer2=1"
+       cookie = "splash=1;disclaimer=1"
+       for i in range(2, 4+1):
+          cookie += f";disclaimer{i}=1"
+       self.headers["Cookie"] = cookie
+       print(cookie)
 
     def name(self):
         return f"{self.site}/{self.board}"
