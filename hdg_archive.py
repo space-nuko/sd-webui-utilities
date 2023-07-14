@@ -30,34 +30,105 @@ from multiprocessing.pool import ThreadPool as Pool
 import signal
 
 g_run_loops = True
+
+
 def signal_handler(signum, frame):
-   global g_run_loops
-   g_run_loops = False
+    global g_run_loops
+    g_run_loops = False
 
 
-parser = argparse.ArgumentParser(description='Optional app description')
-parser.add_argument('path', type=str, help='Path to output directory')
-parser.add_argument('--board', type=str, default="h", help='Board to search for threads')
-parser.add_argument('--process-count', type=int, default=8, help='Number of threads to use for downloading')
-parser.add_argument('--catbox-only', action='store_true', help='Only download catbox links')
-parser.add_argument('--images-only', action='store_true', help='Only download images and videos (no .safetensors, .zip, etc)')
-parser.add_argument('--ignore-deleted', action='store_true', help='Ignore deleted posts')
-parser.add_argument('--num-threads', '-n', type=int, default=None, help='Archive only the N most recent threads')
-parser.add_argument('--sanitize-filepaths', action='store_true', help='Strip non-ASCII characters from output filepaths')
-parser.add_argument('--thread-no', '-t', type=str, help='Single thread number, for use with --board')
+parser = argparse.ArgumentParser(description="Optional app description")
+parser.add_argument("path", type=str, help="Path to output directory")
+parser.add_argument(
+    "--board", type=str, default="h", help="Board to search for threads"
+)
+parser.add_argument(
+    "--process-count",
+    type=int,
+    default=8,
+    help="Number of threads to use for downloading",
+)
+parser.add_argument(
+    "--catbox-only", action="store_true", help="Only download catbox links"
+)
+parser.add_argument(
+    "--images-only",
+    action="store_true",
+    help="Only download images and videos (no .safetensors, .zip, etc)",
+)
+parser.add_argument(
+    "--ignore-deleted", action="store_true", help="Ignore deleted posts"
+)
+parser.add_argument(
+    "--num-threads",
+    "-n",
+    type=int,
+    default=None,
+    help="Archive only the N most recent threads",
+)
+parser.add_argument(
+    "--sanitize-filepaths",
+    action="store_true",
+    help="Strip non-ASCII characters from output filepaths",
+)
+parser.add_argument(
+    "--thread-no", "-t", type=str, help="Single thread number, for use with --board"
+)
 
 
 args = parser.parse_args()
 
 
 sites = {
-    "https://desuarchive.org": ["a", "aco", "an", "c", "cgl", "co", "d", "fit", "g", "his", "int", "k", "m", "mlp", "mu", "q", "qa", "r9k", "tg", "trash", "vr", "wsg"],
-    "https://archiveofsins.com": ["h", "hc", "hm", "i", "lgbt", "r", "s", "soc", "t", "u"],
-#   "https://warosu.org": ["vt"],
+    "https://desuarchive.org": [
+        "a",
+        "aco",
+        "an",
+        "c",
+        "cgl",
+        "co",
+        "d",
+        "fit",
+        "g",
+        "his",
+        "int",
+        "k",
+        "m",
+        "mlp",
+        "mu",
+        "q",
+        "qa",
+        "r9k",
+        "tg",
+        "trash",
+        "vr",
+        "wsg",
+    ],
+    "https://archiveofsins.com": [
+        "h",
+        "hc",
+        "hm",
+        "i",
+        "lgbt",
+        "r",
+        "s",
+        "soc",
+        "t",
+        "u",
+    ],
+    #   "https://warosu.org": ["vt"],
     "https://archive.palanq.win": ["vt", "e"],
     "https://8chan.moe": ["hdg"],
-    "https://fate.5ch.net": ["liveuranus"]
+    "https://fate.5ch.net": ["liveuranus"],
 }
+
+SUBJECTS = [
+    "https://rentry.org/voldy",
+    "https://rentry.org/sdupdates",
+    "http://rentry.org/cputard",
+    "https://rentry.org/NAIwildcards",
+    "https://gitgud.io/gayshit/makesomefuckingporn",
+]
 
 board_to_site = {}
 for site, boards in sites.items():
@@ -78,16 +149,18 @@ print(site)
 sitename = os.path.splitext(os.path.basename(site))[0]
 BASE_URL = site
 OUTPATH = os.path.join(passed_path, sitename, args.board)
-catbox_re = re.compile(r'^http(|s)://files.catbox.moe/.+')
-litterbox_re = re.compile(r'^http(|s)://litter.catbox.moe/.+')
-mega_re = re.compile(r'^http(|s)://mega(\.co|).nz/.+')
-majinai_re = re.compile(r'^http(|s)://(www.|)majinai.art/.+\.(gif|png|jpg|jpeg)')
-catbox_file_re = re.compile(r'^catbox_(.*)\.(.*)')
-imgur_re = re.compile(r'^http(|s)://(i.|)imgur.com/.+\.(gif|png|jpg|jpeg)')
-HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/12.246",}
+catbox_re = re.compile(r"^http(|s)://files.catbox.moe/.+")
+litterbox_re = re.compile(r"^http(|s)://litter.catbox.moe/.+")
+mega_re = re.compile(r"^http(|s)://mega(\.co|).nz/.+")
+majinai_re = re.compile(r"^http(|s)://(www.|)majinai.art/.+\.(gif|png|jpg|jpeg)")
+catbox_file_re = re.compile(r"^catbox_(.*)\.(.*)")
+imgur_re = re.compile(r"^http(|s)://(i.|)imgur.com/.+\.(gif|png|jpg|jpeg)")
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/12.246",
+}
 
 
-class BaseDownloader():
+class BaseDownloader:
     def __init__(self, site, board):
         self.site = site
         self.board = board
@@ -111,27 +184,55 @@ class BaseDownloader():
 
 class FoolFuukaDownloader(BaseDownloader):
     def __init__(self, site, board):
-       super(FoolFuukaDownloader, self).__init__(site, board)
+        super(FoolFuukaDownloader, self).__init__(site, board)
 
     def name(self):
         return f"{self.site}/{self.board}"
 
-    def get_posts(self, page):
-        result = requests.get(BASE_URL + "/_/api/chan/search/", params={"board": args.board, "text": "https://rentry.org/nai-speedrun", "page": page}, headers=self.headers)
+    def get_subject_posts(self, page, subject):
+        result = requests.get(
+            BASE_URL + "/_/api/chan/search/",
+            params={
+                "board": args.board,
+                # archiveofsins doesn't respond to "subject" queries...
+                "text": subject,
+                "page": page,
+            },
+            headers=self.headers,
+        )
         result = result.json()
 
         if "0" not in result:
-            return None
+            return []
 
-        posts = filter(lambda p: p["op"] == "1" and p["board"]["shortname"] == args.board, result["0"]["posts"])
-        return posts
+        posts = filter(
+            lambda p: p["op"] == "1" and p["board"]["shortname"] == args.board,
+            result["0"]["posts"],
+        )
+        return list(posts)
+
+    def get_posts(self, page):
+        posts = []
+        for subject in SUBJECTS:
+            posts += self.get_subject_posts(page, subject)
+        posts_ = []
+        seen = set()
+        for post in posts:
+            if post["thread_num"] not in seen:
+                seen.add(post["thread_num"])
+                posts_.append(post)
+        return sorted(posts_, key=lambda p: int(p["thread_num"]), reverse=True)
 
     def get_thread(self, post=None, id=None):
         thread_num = id if id else post["thread_num"]
 
         print(f"=== THREAD: {thread_num}")
 
-        resp = requests.get(BASE_URL + "/_/api/chan/thread/", params={"board": args.board, "num": thread_num}, headers=self.headers)
+        resp = requests.get(
+            BASE_URL + "/_/api/chan/thread/",
+            params={"board": args.board, "num": thread_num},
+            headers=self.headers,
+        )
         thread = resp.json()
 
         basepath = os.path.join(OUTPATH, thread_num)
@@ -141,16 +242,17 @@ class FoolFuukaDownloader(BaseDownloader):
             return None
 
         if resp.status_code == 200:
-           os.makedirs(basepath, exist_ok=True)
-           with open(os.path.join(basepath, "thread.json"), "w", encoding="utf-8") as f:
-              f.write(resp.text)
+            os.makedirs(basepath, exist_ok=True)
+            with open(
+                os.path.join(basepath, "thread.json"), "w", encoding="utf-8"
+            ) as f:
+                f.write(resp.text)
 
         return thread[thread_num]
 
-
     def get_media_link(self, basepath, media, mtime):
         m = catbox_file_re.match(media["media_filename"])
-        if m: # Convert catbox userscript link
+        if m:  # Convert catbox userscript link
             catbox_id = m.group(1)
             catbox_ext = m.group(2)
             real_name = f"{catbox_id}.{catbox_ext}"
@@ -164,7 +266,6 @@ class FoolFuukaDownloader(BaseDownloader):
             real_name = f"{media_basename}_{media_filename}{media_ext}"
             url = media["media_link"]
         return (basepath, url, real_name, mtime)
-
 
     def get_post_links(self, basepath, post, mtime):
         comment = post["comment"]
@@ -193,7 +294,6 @@ class FoolFuukaDownloader(BaseDownloader):
                 links.append((bp, url, real_name, mtime))
 
         return links, mega_links
-
 
     def _extract_links(self, basepath, posts):
         links = []
@@ -231,7 +331,6 @@ class FoolFuukaDownloader(BaseDownloader):
 
         return links
 
-
     def extract_links(self, thread):
         thread_num = thread["op"]["num"]
         basepath = os.path.join(OUTPATH, thread_num)
@@ -255,19 +354,21 @@ class FoolFuukaDownloader(BaseDownloader):
 
 class FiveChanDownloader(BaseDownloader):
     def __init__(self, site, board):
-       super(FiveChanDownloader, self).__init__(site, board)
-       self.query = "なんJNVA"
+        super(FiveChanDownloader, self).__init__(site, board)
+        self.query = "なんJNVA"
 
     def name(self):
         return "5chan"
 
     def get_posts(self, page):
         if page > 1:
-           return None
+            return None
 
         query = urllib.parse.quote(self.query)
         print(query)
-        resp = requests.get(f"https://find.5ch.net/search?q={query}", headers=self.headers)
+        resp = requests.get(
+            f"https://find.5ch.net/search?q={query}", headers=self.headers
+        )
         page = BeautifulSoup(resp.text, features="html5lib")
         posts = []
 
@@ -275,114 +376,126 @@ class FiveChanDownloader(BaseDownloader):
         pages = []
 
         if os.path.isfile("5ch_cache.txt"):
-           with open("5ch_cache.txt", "r") as f:
-              for url in f.read().split("\n"):
-                 if "liveuranus" in url:
-                     seen[url] = True
+            with open("5ch_cache.txt", "r") as f:
+                for url in f.read().split("\n"):
+                    if "liveuranus" in url:
+                        seen[url] = True
 
         links = []
         hrefs = list(page.find_all("a", class_="list_line_link"))
         for i, a in enumerate(hrefs):
-           link = a.get("href").strip("/")
-           link_title = a.find("div", class_="list_line_link_title").text.strip()
-           if link not in seen or i == len(hrefs) - 1:
-              print(f"Add link: {link_title} ({link})")
-              links.append(link)
-              seen[link] = True
-           else:
-              print(f"Link in cache: {link_title} ({link})")
+            link = a.get("href").strip("/")
+            link_title = a.find("div", class_="list_line_link_title").text.strip()
+            if link not in seen or i == len(hrefs) - 1:
+                print(f"Add link: {link_title} ({link})")
+                links.append(link)
+                seen[link] = True
+            else:
+                print(f"Link in cache: {link_title} ({link})")
 
-        r = re.compile(r'/(\d*)$')
-        links.append(list(sorted(seen.keys(), key=lambda l: int(r.search(l).groups(1)[0]), reverse=True))[-1])
+        r = re.compile(r"/(\d*)$")
+        links.append(
+            list(
+                sorted(
+                    seen.keys(),
+                    key=lambda l: int(r.search(l).groups(1)[0]),
+                    reverse=True,
+                )
+            )[-1]
+        )
 
         while links:
-           link = links.pop()
-           resp = requests.get(link, headers=self.headers)
-           page = BeautifulSoup(resp.text, features="html5lib")
-           page_title = page.find("h1", class_="title")
-           if not page_title:
-              print(f"SKIPPING THREAD (no title): {page_title} (link)")
-              continue
-           page_title = page_title.text.strip()
-           if self.query not in page_title and "なんJnove" not in page_title:
-              print(f"SKIPPING THREAD (unrelated): {page_title} (link)")
-              continue
+            link = links.pop()
+            resp = requests.get(link, headers=self.headers)
+            page = BeautifulSoup(resp.text, features="html5lib")
+            page_title = page.find("h1", class_="title")
+            if not page_title:
+                print(f"SKIPPING THREAD (no title): {page_title} (link)")
+                continue
+            page_title = page_title.text.strip()
+            if self.query not in page_title and "なんJnove" not in page_title:
+                print(f"SKIPPING THREAD (unrelated): {page_title} (link)")
+                continue
 
-           pages.append((link, page))
-           print(f"Scan page: {page_title} ({link})")
-           for i in range(1, 40):
-               first = page.find("div", class_="post", id=str(i))
-               if not first:
-                  print(f"SKIPPING THREAD (no posts): {link}")
-                  continue
+            pages.append((link, page))
+            print(f"Scan page: {page_title} ({link})")
+            for i in range(1, 40):
+                first = page.find("div", class_="post", id=str(i))
+                if not first:
+                    print(f"SKIPPING THREAD (no posts): {link}")
+                    continue
 
-               extractor = URLExtract()
-               urls = extractor.find_urls(first.text)
-               for url in urls:
-                  url = url.lower().strip("/").replace("http://", "https://")
-                  if "fate.5ch.net/test/read.cgi/" in url and not url in seen:
-                     seen[url] = True
-                     links.append(url)
-                     print(f"Found new link: {url}")
+                extractor = URLExtract()
+                urls = extractor.find_urls(first.text)
+                for url in urls:
+                    url = url.lower().strip("/").replace("http://", "https://")
+                    if "fate.5ch.net/test/read.cgi/" in url and not url in seen:
+                        seen[url] = True
+                        links.append(url)
+                        print(f"Found new link: {url}")
 
-                     with open("5ch_cache.txt", "w") as f:
-                        f.write("\n".join(seen.keys()))
+                        with open("5ch_cache.txt", "w") as f:
+                            f.write("\n".join(seen.keys()))
 
         downloaded = {k[0]: True for k in pages}
         for link in seen.keys():
-           if not link in downloaded:
-              pages.append((link, None))
+            if not link in downloaded:
+                pages.append((link, None))
 
         pages = sorted(pages, key=lambda l: l[0], reverse=True)
 
         return pages
 
     def get_thread(self, post=None, id=None):
-       if post:
-          link, page = post
-       else:
-          link = f"https://fate.5ch.net/test/read.cgi/{args.board}/{id}"
-          page = None
+        if post:
+            link, page = post
+        else:
+            link = f"https://fate.5ch.net/test/read.cgi/{args.board}/{id}"
+            page = None
 
-       r = re.compile(r'liveuranus/(\d*)')
-       thread_num = r.search(link).groups(1)[0]
-       print(f"=== THREAD: {thread_num}")
+        r = re.compile(r"liveuranus/(\d*)")
+        thread_num = r.search(link).groups(1)[0]
+        print(f"=== THREAD: {thread_num}")
 
-       if not page:
-           resp = requests.get(link, headers=self.headers)
-           if resp.status_code == 200:
-               page = BeautifulSoup(resp.text, features="html5lib")
+        if not page:
+            resp = requests.get(link, headers=self.headers)
+            if resp.status_code == 200:
+                page = BeautifulSoup(resp.text, features="html5lib")
 
-       basepath = os.path.join(OUTPATH, thread_num)
-       os.makedirs(basepath, exist_ok=True)
-       if page:
-          with open(os.path.join(basepath, "thread.html"), "w", encoding="utf-8") as f:
-             f.write(str(page))
+        basepath = os.path.join(OUTPATH, thread_num)
+        os.makedirs(basepath, exist_ok=True)
+        if page:
+            with open(
+                os.path.join(basepath, "thread.html"), "w", encoding="utf-8"
+            ) as f:
+                f.write(str(page))
 
-       return (link, page)
+        return (link, page)
 
     def extract_links(self, thread):
         url, page = thread
-        r = re.compile(r'liveuranus/(\d*)')
+        r = re.compile(r"liveuranus/(\d*)")
         thread_num = r.search(url).groups(1)[0]
         basepath = os.path.join(OUTPATH, thread_num)
         if not page:
-           print(f"!!! SKIPPING (no page): {url}")
-           return []
+            print(f"!!! SKIPPING (no page): {url}")
+            return []
         thread = page.find("div", class_="thread")
 
         links = []
         mega_links = []
 
-        date_re = re.compile(r'\([^)]+\)')
+        date_re = re.compile(r"\([^)]+\)")
         extractor = URLExtract()
         for post in thread.find_all("div", class_="post"):
             date = post.find("span", class_="date")
-            if "Over" in date.text: # Over 1000
-               continue
+            if "Over" in date.text:  # Over 1000
+                continue
 
             date_str = re.sub(date_re, "", date.text)
-            mtime = int(datetime.timestamp(datetime.strptime(date_str, '%Y/%m/%d %H:%M:%S.%f')))
+            mtime = int(
+                datetime.timestamp(datetime.strptime(date_str, "%Y/%m/%d %H:%M:%S.%f"))
+            )
 
             message = post.find("div", class_="message")
             urls = extractor.find_urls(message.text)
@@ -391,17 +504,25 @@ class FiveChanDownloader(BaseDownloader):
                 real_name = os.path.basename(url)
                 print(url)
                 if catbox_re.match(url):
-                    links.append((os.path.join(basepath, "catbox"), url, real_name, mtime))
+                    links.append(
+                        (os.path.join(basepath, "catbox"), url, real_name, mtime)
+                    )
                 if litterbox_re.match(url):
-                    links.append((os.path.join(basepath, "litterbox"), url, real_name, mtime))
+                    links.append(
+                        (os.path.join(basepath, "litterbox"), url, real_name, mtime)
+                    )
                 elif mega_re.match(url):
                     mega_links.append(url)
                 elif imgur_re.match(url):
                     real_name = os.path.basename(url)
-                    links.append((os.path.join(basepath, "imgur"), url, real_name, mtime))
+                    links.append(
+                        (os.path.join(basepath, "imgur"), url, real_name, mtime)
+                    )
                 elif majinai_re.match(url):
                     real_name = os.path.basename(url)
-                    links.append((os.path.join(basepath, "majinai"), url, real_name, mtime))
+                    links.append(
+                        (os.path.join(basepath, "majinai"), url, real_name, mtime)
+                    )
 
         mega_path = os.path.join(basepath, "mega.txt")
         os.makedirs(os.path.dirname(mega_path), exist_ok=True)
@@ -414,20 +535,24 @@ class FiveChanDownloader(BaseDownloader):
 
 class EightChanDownloader(BaseDownloader):
     def __init__(self, site, board):
-       super(EightChanDownloader, self).__init__(site, board)
-       cookie = "splash=1;disclaimer=1"
-       for i in range(2, 4+1):
-          cookie += f";disclaimer{i}=1"
-       self.headers["Cookie"] = cookie
-       print(cookie)
+        super(EightChanDownloader, self).__init__(site, board)
+        cookie = "splash=1;disclaimer=1"
+        for i in range(2, 10 + 1):
+            cookie += f";disclaimer{i}=1"
+        self.headers["Cookie"] = cookie
+        print(cookie)
 
     def name(self):
         return f"{self.site}/{self.board}"
 
     def get_posts(self, page):
         if page > 1:
-           return None
-        result = requests.get(f"{BASE_URL}/{self.board}/catalog.json", params={"page": page}, headers=self.headers)
+            return None
+        result = requests.get(
+            f"{BASE_URL}/{self.board}/catalog.json",
+            params={"page": page},
+            headers=self.headers,
+        )
         result.raise_for_status()
         result = result.json()
 
@@ -441,8 +566,10 @@ class EightChanDownloader(BaseDownloader):
 
         print(f"=== THREAD: {thread_num}")
 
-        resp = requests.get(f"{BASE_URL}/{self.board}/res/{thread_num}.json", headers=self.headers)
-        resp.raise_for_status()
+        resp = requests.get(
+            f"{BASE_URL}/{self.board}/res/{thread_num}.json", headers=self.headers
+        )
+        resp.raise_for_status()
         thread = resp.json()
 
         basepath = os.path.join(OUTPATH, str(thread_num))
@@ -453,14 +580,13 @@ class EightChanDownloader(BaseDownloader):
             return None
 
         with open(os.path.join(basepath, "thread.json"), "w", encoding="utf-8") as f:
-           f.write(resp.text)
+            f.write(resp.text)
 
         return thread
 
-
     def get_file_link(self, basepath, file, mtime):
         m = catbox_file_re.match(file["originalName"])
-        if m: # Convert catbox userscript link
+        if m:  # Convert catbox userscript link
             catbox_id = m.group(1)
             catbox_ext = m.group(2)
             real_name = f"{catbox_id}.{catbox_ext}"
@@ -474,7 +600,6 @@ class EightChanDownloader(BaseDownloader):
             real_name = f"{media_basename}_{media_filename}{media_ext}"
             url = f"{BASE_URL}{file['path']}"
         return (basepath, url, real_name, mtime)
-
 
     def get_post_links(self, basepath, post, mtime):
         message = post["message"]
@@ -492,12 +617,13 @@ class EightChanDownloader(BaseDownloader):
                 links.append((os.path.join(basepath, "catbox"), url, real_name, mtime))
             elif litterbox_re.match(url):
                 real_name = os.path.basename(url)
-                links.append((os.path.join(basepath, "litterbox"), url, real_name, mtime))
+                links.append(
+                    (os.path.join(basepath, "litterbox"), url, real_name, mtime)
+                )
             elif mega_re.match(url):
                 mega_links.append(url)
 
         return links, mega_links
-
 
     def _extract_links(self, basepath, posts):
         links = []
@@ -528,7 +654,6 @@ class EightChanDownloader(BaseDownloader):
 
         return links
 
-
     def extract_links(self, thread):
         thread_num = thread["threadId"]
         basepath = os.path.join(OUTPATH, str(thread_num))
@@ -552,13 +677,22 @@ class EightChanDownloader(BaseDownloader):
 
 class WarosuDownloader(BaseDownloader):
     def __init__(self, site, board):
-       super(WarosuDownloader, self).__init__(site, board)
+        super(WarosuDownloader, self).__init__(site, board)
 
     def name(self):
         return f"{self.site}/{self.board}"
 
     def get_posts(self, page):
-        result = requests.get(f"{BASE_URL}/{self.board}/", params={"offset": (page-1) * 24, "task": "search", "ghost": "", "search_text": "rentry.org/voldy"}, headers=self.headers)
+        result = requests.get(
+            f"{BASE_URL}/{self.board}/",
+            params={
+                "offset": (page - 1) * 24,
+                "task": "search",
+                "ghost": "",
+                "search_text": "rentry.org/voldy",
+            },
+            headers=self.headers,
+        )
 
         if not result:
             return None
@@ -574,21 +708,24 @@ class WarosuDownloader(BaseDownloader):
 
         print(f"=== THREAD: {thread_num}")
 
-        resp = requests.get(f"{BASE_URL}/{self.board}/thread/S{thread_num}", headers=self.headers)
+        resp = requests.get(
+            f"{BASE_URL}/{self.board}/thread/S{thread_num}", headers=self.headers
+        )
 
         basepath = os.path.join(OUTPATH, str(thread_num))
         os.makedirs(basepath, exist_ok=True)
         if resp.status_code == 200:
-           with open(os.path.join(basepath, "thread.html"), "w", encoding="utf-8") as f:
-              f.write(resp.text)
+            with open(
+                os.path.join(basepath, "thread.html"), "w", encoding="utf-8"
+            ) as f:
+                f.write(resp.text)
 
         return BeautifulSoup(resp.text, features="html5lib")
 
-
     def get_file_link(self, basepath, post, mtime):
-        span = post.find("span", text=re.compile(r'^File:'))
+        span = post.find("span", text=re.compile(r"^File:"))
         if not span:
-           return None
+            return None
 
         split = span.text.split(",", 3)
         original_name = split[2].strip()
@@ -596,7 +733,7 @@ class WarosuDownloader(BaseDownloader):
         url = "https:" + a.get("href")
 
         m = catbox_file_re.match(original_name)
-        if m: # Convert catbox userscript link
+        if m:  # Convert catbox userscript link
             catbox_id = m.group(1)
             catbox_ext = m.group(2)
             real_name = f"{catbox_id}.{catbox_ext}"
@@ -609,7 +746,6 @@ class WarosuDownloader(BaseDownloader):
             media_filename = os.path.splitext(original_name)[0]
             real_name = f"{media_basename}_{media_filename}{media_ext}"
         return (basepath, url, real_name, mtime)
-
 
     def get_post_links(self, basepath, post, mtime):
         message = post.select_one("p", itemprop="text")
@@ -626,19 +762,22 @@ class WarosuDownloader(BaseDownloader):
                 links.append((os.path.join(basepath, "catbox"), url, real_name, mtime))
             elif litterbox_re.match(url):
                 real_name = os.path.basename(url)
-                links.append((os.path.join(basepath, "litterbox"), url, real_name, mtime))
+                links.append(
+                    (os.path.join(basepath, "litterbox"), url, real_name, mtime)
+                )
             elif mega_re.match(url):
                 mega_links.append(url)
 
         return links, mega_links
-
 
     def _extract_links(self, basepath, posts):
         links = []
         mega_links = []
         seen = {}
         for post in posts:
-            mtime = int(post.find("span", class_="posttime").get("title")[:-3]) - (5 * 60 * 60) # date is in America/New_York timezone
+            mtime = int(post.find("span", class_="posttime").get("title")[:-3]) - (
+                5 * 60 * 60
+            )  # date is in America/New_York timezone
             link = self.get_file_link(basepath, post, mtime)
             if link and not link[1].lower() in seen:
                 links.append(link)
@@ -660,11 +799,10 @@ class WarosuDownloader(BaseDownloader):
 
         return links
 
-
     def extract_links(self, thread):
         content = thread.select_one(".content > div")
         if not content:
-           return []
+            return []
 
         thread_num = content["id"].replace("p", "")
         basepath = os.path.join(OUTPATH, str(thread_num))
@@ -679,7 +817,7 @@ def extra_sanitize_filepath(path):
         p = p[:250]
         path = f"{p}{e}"
     if args.sanitize_filepaths:  # strip out emoji and other non-ASCII characters
-       path = path.encode("ascii", errors="replace").decode("utf-8").replace("?", "_")
+        path = path.encode("ascii", errors="replace").decode("utf-8").replace("?", "_")
     path = sanitize_filepath(path, platform=platform.system())
     return path
 
@@ -691,7 +829,9 @@ def save_link(basepath, url, real_name, mtime):
 
     if args.images_only:
         mimetype = mimetypes.guess_type(url)[0]
-        if not mimetype or (not mimetype.startswith("image/") and not mimetype.startswith("video/")):
+        if not mimetype or (
+            not mimetype.startswith("image/") and not mimetype.startswith("video/")
+        ):
             return
 
     path = os.path.join(basepath, real_name)
@@ -707,7 +847,7 @@ def save_link(basepath, url, real_name, mtime):
     resp = requests.get(url, stream=True, headers=HEADERS)
     if resp.status_code == 200:
         try:
-            with open(path, 'wb') as f:
+            with open(path, "wb") as f:
                 for chunk in resp:
                     if not g_run_loops:
                         raise KeyboardInterrupt()
@@ -730,13 +870,13 @@ def worker(t):
 
 page = 1
 if site == "https://fate.5ch.net":
-   downloader = FiveChanDownloader(site, "liveuranus")
+    downloader = FiveChanDownloader(site, "liveuranus")
 elif site == "https://8chan.moe":
-   downloader = EightChanDownloader(site, args.board)
+    downloader = EightChanDownloader(site, args.board)
 elif site == "https://warosu.org":
-   downloader = WarosuDownloader(site, args.board)
+    downloader = WarosuDownloader(site, args.board)
 else:
-   downloader = FoolFuukaDownloader(site, args.board)
+    downloader = FoolFuukaDownloader(site, args.board)
 
 
 os.makedirs(OUTPATH, exist_ok=True)
@@ -744,71 +884,71 @@ print(f"Saving files in /{downloader.name()} to {OUTPATH}...")
 
 
 def download_thread(thread):
-      links = downloader.extract_links(thread)
-      if not links:
-         print("!!! SKIPPING (no links)")
-         return False
+    links = downloader.extract_links(thread)
+    if not links:
+        print("!!! SKIPPING (no links)")
+        return False
 
-      print(f"+++ {len(links)} links to download.")
+    print(f"+++ {len(links)} links to download.")
 
-      original_sigint = signal.getsignal(signal.SIGINT)
+    original_sigint = signal.getsignal(signal.SIGINT)
 
-      p = Pool(processes=max(1, args.process_count))
-      signal.signal(signal.SIGINT, signal_handler)
+    p = Pool(processes=max(1, args.process_count))
+    signal.signal(signal.SIGINT, signal_handler)
 
-      for res in p.imap_unordered(worker, links):
-            if not g_run_loops:
-               p.close()
-               p.join()
-               print("Interrupted, exiting")
-               exit(1)
+    for res in p.imap_unordered(worker, links):
+        if not g_run_loops:
+            p.close()
+            p.join()
+            print("Interrupted, exiting")
+            exit(1)
 
-      p.close()
-      p.join()
-      signal.signal(signal.SIGINT, original_sigint)
+    p.close()
+    p.join()
+    signal.signal(signal.SIGINT, original_sigint)
 
-      return True
+    return True
 
 
 def archive_multiple():
-   global page
-   threads = 0
-   while True:
-      print(f"*** Page {page} ***")
+    global page
+    threads = 0
+    while True:
+        print(f"*** Page {page} ***")
 
-      posts = downloader.get_posts(page)
-      if posts is None:
-         print("Finished")
-         return
+        posts = downloader.get_posts(page)
+        if posts is None:
+            print("Finished")
+            return
 
-      for post in posts:
-         thread = downloader.get_thread(post)
-         if not thread:
-               continue
+        for post in posts:
+            thread = downloader.get_thread(post)
+            if not thread:
+                continue
 
-         if download_thread(thread):
-            threads += 1
+            if download_thread(thread):
+                threads += 1
 
-         if args.num_threads and threads >= args.num_threads:
-            print(f"Finished archiving latest {args.num_threads}.")
-            exit(0)
+            if args.num_threads and threads >= args.num_threads:
+                print(f"Finished archiving latest {args.num_threads}.")
+                exit(0)
 
-      page += 1
+        page += 1
 
 
 def archive_single():
-   thread = downloader.get_thread(id=args.thread_no)
-   if not thread:
-      print(f"Thread not found: {args.thread_no}")
-      exit(1)
+    thread = downloader.get_thread(id=args.thread_no)
+    if not thread:
+        print(f"Thread not found: {args.thread_no}")
+        exit(1)
 
-   if not download_thread(thread):
-      exit(1)
+    if not download_thread(thread):
+        exit(1)
 
-   print(f"Downloaded thread {args.thread_no}")
+    print(f"Downloaded thread {args.thread_no}")
 
 
 if args.thread_no:
-   archive_single()
+    archive_single()
 else:
-   archive_multiple()
+    archive_multiple()
