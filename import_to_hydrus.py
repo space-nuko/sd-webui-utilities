@@ -286,8 +286,8 @@ def get_naiv3_settings(data):
         del settings["height"]
 
     result = [f"{k}:{format_setting(v)}" for k, v in settings.items()]
-    result.append(f'naiv3_software:{data["Software"]}')
-    result.append(f'naiv3_source:{data["Source"]}')
+    result.append(f'nai_software:{data["Software"]}')
+    result.append(f'nai_source:{data["Source"]}')
     # result.append(f'naiv3_gen_time:{data["Generation time"]}')
     return result
 

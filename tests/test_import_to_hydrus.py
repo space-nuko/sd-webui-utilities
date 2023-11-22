@@ -252,7 +252,7 @@ Steps: 40, Sampler: DPM++ 2M Karras, CFG scale: 9, Seed: 2976004442, Size: 576x5
             'hide_debug_overlay:false',
             'lora_unet_weights:null',
             'moody',
-            'naiv3_source:Stable Diffusion XL C1E1DE52',
-            'naiv3_software:NovelAI'})
+            'nai_source:Stable Diffusion XL C1E1DE52',
+            'nai_software:NovelAI'})
         self.assertEqual(positive, "{artist:nishikasai munieru}, 1girl, barefoot, solo, spread toes, soles, night, lamp, on bed, bedroom, moody, knees together, best quality, amazing quality, very aesthetic, absurdres")
         self.assertEqual(negative, "nsfw, lowres, {bad}, error, fewer, extra, missing, worst quality, jpeg artifacts, bad quality, watermark, unfinished, displeasing, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract], worst quality, low quality, artist name, signature, watermark")
