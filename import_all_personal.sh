@@ -4,6 +4,8 @@ set -e
 
 INPATH=/e/sd/outputs
 
+python import_to_hydrus.py import ~/Pictures/ai/nai3 -tsite:personal
+
 python import_to_hydrus.py import /e/ComfyUI/output      -tsite:personal -tgen_type:comfyui
 
 python import_to_hydrus.py import $INPATH/txt2img-images -tsite:personal -tgen_type:txt2img-images
