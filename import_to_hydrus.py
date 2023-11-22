@@ -278,6 +278,13 @@ def get_naiv3_settings(data):
     settings = data["Comment"]
     del settings["prompt"]
     del settings["uc"]
+
+    # remove dimension tags since they're redundant
+    if "width" in settings:
+        del settings["width"]
+    if "height" in settings:
+        del settings["height"]
+
     result = [f"{k}:{format_setting(v)}" for k, v in settings.items()]
     result.append(f'naiv3_software:{data["Software"]}')
     result.append(f'naiv3_source:{data["Source"]}')
