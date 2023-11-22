@@ -52,6 +52,7 @@ while True:
         "datasourceId": "datasourceId=182f8bb2-d729-4a38-b539-7cf1a901cf2e"
     }
     resp = requests.get(f"https://www.christies.com/api/discoverywebsite/search/lot-infos", params=params, headers=HEADERS)
+    print(resp.content)
     resp = resp.json()
     if "lots" not in resp or not resp["lots"]:
         print("Finished.")

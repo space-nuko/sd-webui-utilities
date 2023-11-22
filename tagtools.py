@@ -26,6 +26,7 @@ import shutil
 import requests
 import pandas
 import html
+import math
 
 
 DEFAULT_REPLACE_UNDERSCORE_EXCLUDES = "0_0, (o)_(o), +_+, +_-, ._., <o>_<o>, <|>_<|>, =_=, >_<, 3_3, 6_9, >_o, @_@, ^_^, o_o, u_u, x_x, |_|, ||_||"
@@ -90,6 +91,7 @@ parser_organize_lowres = subparsers.add_parser('organize_lowres', help='Move ima
 parser_organize_lowres.add_argument('path', type=str, help='Path to caption files')
 parser_organize_lowres.add_argument('--folder-name', '-n', type=str, help='Name of subfolder')
 parser_organize_lowres.add_argument('--split-rest', '-s', action="store_true", help='Move all non-matching images into another folder')
+parser_organize_lowres.add_argument('--size', '-i', type=int, help='Max size of images')
 
 parser_organize_overtagged = subparsers.add_parser('organize_overtagged', help='Move overtagged images a subfolder')
 parser_organize_overtagged.add_argument('path', type=str, help='Path to caption files')
@@ -178,7 +180,7 @@ def fixup(args):
 
                 fixed_tags = []
                 for i in these_tags:
-                    if i not in fixed_tags:
+                    if i and i not in fixed_tags:
                         fixed_tags.append(i)
 
                 with open(txt, "w", encoding="utf-8") as f:
@@ -445,7 +447,7 @@ def merge(args):
         found = False
 
         other_txt = os.path.join(args.to_merge, os.path.basename(txt))
-        if get_caption_file_image(txt) and os.path.isfile(other_txt) and get_caption_file_image(other_txt):
+        if get_caption_file_image(txt) and os.path.isfile(other_txt):
             with open(txt, "r", encoding="utf-8") as f:
                 these_tags = [to_danbooru_tag(t) for t in f.read().split(",")]
 
@@ -493,10 +495,11 @@ def organize(args):
 
 
 def organize_lowres(args):
-    folder_name = "lowres"
+    folder_name = args.folder_name or "lowres"
     def test(txt, img):
         pil = Image.open(img)
-        return pil.size[0] < 400 or pil.size[1] < 400
+        size = math.sqrt(pil.size[0] * pil.size[1])
+        return size < args.size
 
     return do_organize(args, test, folder_name)
 

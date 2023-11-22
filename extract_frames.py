@@ -9,7 +9,8 @@ import ffmpeg
 parser = argparse.ArgumentParser(description='Extract frames')
 parser.add_argument('files', type=str, nargs="*", help='Files to process')
 parser.add_argument('--out', '-o', type=str, default=".", help='Output directory')
-parser.add_argument('--extract-every-secs', '-e', type=float, default=0.5, help='Extract a frame every N seconds')
+parser.add_argument('--extract-every-secs', '-s', type=float, default=1.0, help='Extract a frame every N seconds')
+parser.add_argument('--frame-count', '-c', type=int, default=0, help='Number of frames to extract')
 
 args = parser.parse_args()
 
@@ -30,9 +31,14 @@ for file in args.files:
 
     format = data["format"]
     duration = float(format["duration"])
-    frames = duration / args.extract_every_secs
-    fps = eval(data["streams"][0]["r_frame_rate"])
-    fps = 1 / args.extract_every_secs
+
+    if args.frame_count > 0:
+        frames = args.frame_count
+        fps = frames / duration
+    else:
+        frames = int(duration / args.extract_every_secs)
+        fps = eval(data["streams"][0]["r_frame_rate"])
+        fps = 1 / args.extract_every_secs
 
     basename = os.path.splitext(os.path.basename(file))[0]
     outpath = os.path.join(OUTPATH, basename)

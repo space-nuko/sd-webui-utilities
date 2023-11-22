@@ -52,11 +52,13 @@ def worker(item):
 
     artists = ", ".join(item["artists"])
     artwork_name = item["title"]
-    departments = ", ".join(item["departments"])
-    txt = f"{artists}, {artwork_name}, {departments}"
+    txt = f"{artists}, {artwork_name}"
 
-    if "fullText" in item:
-        txt += f", {item['fullText']}"
+    # if "departments" in item and item["departments"]:
+    #     txt += ", " + ", ".join(item["departments"])
+
+    # if "fullText" in item and item["fullText"]:
+    #     txt += f", {item['fullText']}"
 
     txt_name = os.path.splitext(os.path.basename(path))[0] + ".txt"
     txt_path = os.path.join(os.path.dirname(path), txt_name)

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Usage: browse "all artist's artworks" page, look in Inspector tab for call to /search?, pass the integer ID to script
 
 import os
 import os.path
@@ -17,8 +18,13 @@ HEADERS = {
 
 
 def worker(work):
-    url = work["media"]["base_url"] + f"/img/orig/work/{work['media']['data']['version_orig']}/{work['media']['media_id']}.webp"
-    path = sanitize_filepath(os.path.join("arthive", str(artist), os.path.basename(url)))
+    url = (
+        work["media"]["base_url"]
+        + f"/img/orig/work/{work['media']['data']['version_orig']}/{work['media']['media_id']}.webp"
+    )
+    path = sanitize_filepath(
+        os.path.join("arthive", str(artist), os.path.basename(url))
+    )
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
     if os.path.exists(path):
@@ -45,7 +51,11 @@ def worker(work):
 no = 1
 while True:
     print(f"=== Page {no} ===")
-    resp = requests.get(f"https://arthive.com/action/vue/works/search", params={"artist": artist, "p": no}, headers=HEADERS)
+    resp = requests.get(
+        f"https://arthive.com/action/vue/works/search",
+        params={"artist": artist, "p": no},
+        headers=HEADERS,
+    )
     resp = resp.json()
     if "works" not in resp or not resp["works"]:
         print("Finished.")
