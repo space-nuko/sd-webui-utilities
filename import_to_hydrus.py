@@ -570,8 +570,16 @@ class PromptParseResult:
     realpath: str
     parameters: any
     tags: set[str]
+    personal_tags: set[str]
     positive: str
     negative: str
+
+    def get_notes(self):
+        return {"filename": self.realpath,
+                "parameters": self.parameters,
+                "positive": self.positive,
+                "negative": self.negative
+                }
 
 
 def do_import(client, service_key, tag_sets):
@@ -595,11 +603,7 @@ def do_import(client, service_key, tag_sets):
                     image = Image.open(path)
                     image.load()
                     client.set_notes(
-                        {"filename": parse_result.realpath,
-                            "parameters": parse_result.parameters,
-                            "positive": parse_result.positive,
-                            "negative": parse_result.negative
-                            },
+                        parse_result.get_notes(),
                         hash_=result["hash"],
                     )
     tag_sets.clear()
@@ -609,6 +613,53 @@ def do_import(client, service_key, tag_sets):
             f.write(line + "\n")
 
     signal.signal(signal.SIGINT, original_sigint)
+
+
+def read_parameters(image):
+    if "parameters" in image.info:  # A1111
+        params = image.info["parameters"]
+        return "a1111", params
+    elif "prompt" in image.info:  # ComfyUI
+        params = image.info["prompt"]
+        return "comfyui", params
+    elif is_naiv3_metadata(image.info): # NAI
+        result = {}
+        for key in ["Title", "Description", "Software", "Source", "Generation time", "Comment"]:
+            result[key] = image.info[key]
+        params = json.dumps(result)
+        return "nai_v3", params
+    else:
+        try:
+            params = read_info_from_image_stealth(image)
+            if params is not None:
+                # NAIv3
+                result = json.loads(params)
+                if is_naiv3_metadata(result):
+                    return "nai_v3", params
+        except Exception as ex:
+            print(ex)
+            return None, None
+
+        return None, None
+
+
+def read_tags(prompt_type, params):
+    tags = None
+    positive = None
+    negative = None
+
+    if prompt_type == "a1111":
+        tags, positive, negative = parse_a1111_prompt(params)
+    elif prompt_type == "comfyui":
+        tags, positive, negative = parse_comfyui_prompt(params)
+    elif prompt_type == "nai_v3":
+        tags, positive, negative = parse_nai_prompt(params)
+
+    if tags is None:
+        return None, None, None
+
+    tags.add(f"prompt_type:{prompt_type}")
+    return tags, positive, negative
 
 
 def parse_image(path, default_tags):
@@ -628,53 +679,17 @@ def parse_image(path, default_tags):
         print(f"!!! FAILED to open: {path} ({ex})")
         return None
 
-    params = ""
-    tags = []
-    positive = ""
-    negative = ""
+    prompt_type, parameters = read_parameters(image)
+    if prompt_type is None:
+        return None
 
-    if "parameters" in image.info:  # A1111
-        prompt_type = "a1111"
-        params = image.info["parameters"]
-        tags, positive, negative = parse_a1111_prompt(params)
-    elif "prompt" in image.info:  # ComfyUI
-        prompt_type = "comfyui"
-        params = image.info["prompt"]
-        tags, positive, negative = parse_comfyui_prompt(params)
-        if tags is None:
-            return None
-    elif is_naiv3_metadata(image.info): # NAI
-        result = {}
-        for key in ["Title", "Description", "Software", "Source", "Generation time", "Comment"]:
-            result[key] = image.info[key]
-        prompt_type = "nai_v3"
-        params = json.dumps(result)
-        tags, positive, negative = parse_nai_prompt(result)
-    else:
-        try:
-            result_str = read_info_from_image_stealth(image)
-            if result_str is not None:
-                try:
-                    # NAIv3
-                    result = json.loads(result_str)
-                    if is_naiv3_metadata(result):
-                        prompt_type = "nai_v3"
-                        params = result_str
-                        tags, positive, negative = parse_nai_prompt(result)
-                    else:
-                        return None
-                except Exception:
-                    return None
-            else:
-                return None
-        except Exception as ex:
-            print(ex)
-            return None
+    tags, positive, negative = read_tags(prompt_type, parameters)
+    if tags is None:
+        return None
 
-    tags.update(default_tags)
     tags.add(f"prompt_type:{prompt_type}")
 
-    return PromptParseResult(path, params, tags, positive, negative)
+    return PromptParseResult(path, parameters, tags, default_tags, positive, negative)
 
 
 def import_path(client, target_path, service_key, tags=(), recursive=True):
@@ -743,8 +758,11 @@ def cmd_import(arguments, client):
             f.write(line + "\n")
 
 
+NOTE_NAMES = ["filename", "parameters", "positive", "negative"]
+
+
 def cmd_retag(arguments, client):
-    keep_tags = ["board", "site", "gen_type"]
+    # keep_tags = ["board", "site", "gen_type"]
     all_file_ids = client.search_files(arguments.query)
     service_key = None
     for file_ids in hydrus_api.utils.yield_chunks(all_file_ids, 100):
@@ -763,32 +781,33 @@ def cmd_retag(arguments, client):
             needs_update = False
             file_id = meta["file_id"]
             notes = meta["notes"]
-            # pp(meta)
+            existing_tags = set(
+                meta["tags"][service_key]["storage_tags"].get(
+                    str(hydrus_api.TagStatus.CURRENT), {}
+                )
+            )
 
-            if "parameters" not in notes:
+            parameters = notes.get("parameters", None)
+            prompt_type = next((tag for tag in existing_tags if tag.startswith("prompt_type:")), None)
+
+            if parameters is None or prompt_type is None:
                 needs_update = True
                 resp = client.get_file(file_id=file_id)
                 with BytesIO() as b:
                     for chunk in resp:
                         b.write(chunk)
                     img = Image.open(b)
-                    if not "parameters" in img.info:
+                    prompt_type, parameters = read_parameters(img)
+                    if parameters is None:
                         continue
-                    notes["parameters"] = img.info["parameters"]
 
-            existing_tags = set(
-                meta["tags"][service_key]["storage_tags"].get(
-                    str(hydrus_api.TagStatus.CURRENT), {}
-                )
-            )
-            new_tags = set(parse_a1111_prompt(notes["parameters"]))
+            if prompt_type is None or parameters is None:
+                continue
 
-            for tag in existing_tags:
-                if ":" in tag and not tag.startswith("negative:"):
-                    new_tags.add(tag)
-
-            # pp(existing_tags)
-            # pp(new_tags)
+            new_tags, positive, negative = read_tags(prompt_type, parameters)
+            if new_tags is None:
+                print(f"No tags parsed in existing image! {file_id}")
+                continue
 
             needs_update = (
                 needs_update or (existing_tags - new_tags) or (new_tags - existing_tags)
@@ -821,6 +840,11 @@ def cmd_retag(arguments, client):
                 client.add_tags(
                     file_ids=[file_id], service_keys_to_actions_to_tags=params_add
                 )
+
+                notes["parameters"] = parameters
+                notes["positive"] = positive
+                notes["negative"] = negative
+
                 client.set_notes(notes=notes, file_id=file_id)
 
                 signal.signal(signal.SIGINT, original_sigint)
