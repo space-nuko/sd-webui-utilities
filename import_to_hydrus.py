@@ -56,6 +56,7 @@ re_AND = re.compile(r"\bAND\b")
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--service", "-s", default="stable-diffusion-webui")
+parser.add_argument("--personal-service", "-p", default="my tags")
 parser.add_argument("--api-url", "-a", default=hydrus_api.DEFAULT_API_URL)
 parser.add_argument("--api_key", "-k", default=None)
 parser.add_argument(
@@ -295,6 +296,8 @@ def get_naiv3_settings(data):
 
 
 def parse_nai_prompt(data):
+    if isinstance(data, str):
+        data = json.loads(data)
     data["Comment"] = json.loads(data["Comment"])
 
     orig_positive = data["Description"]
@@ -570,7 +573,6 @@ class PromptParseResult:
     realpath: str
     parameters: any
     tags: set[str]
-    personal_tags: set[str]
     positive: str
     negative: str
 
@@ -582,7 +584,7 @@ class PromptParseResult:
                 }
 
 
-def do_import(client, service_key, tag_sets):
+def do_import(client, service_key, personal_service_key, tag_sets, personal_tags):
     global cache
 
     original_sigint = signal.getsignal(signal.SIGINT)
@@ -593,6 +595,7 @@ def do_import(client, service_key, tag_sets):
         results = hydrus_api.utils.add_and_tag_files(
             client, paths, tags, tag_service_keys=[service_key]
         )
+        hashes = set()
         for parse_result, result in zip(parse_results, results):
             path = parse_result.realpath
             status = result.get("status", 4)
@@ -606,6 +609,11 @@ def do_import(client, service_key, tag_sets):
                         parse_result.get_notes(),
                         hash_=result["hash"],
                     )
+                    hashes.add(result["hash"])
+
+        if hashes:
+            client.add_tags(hashes, service_keys_to_tags={personal_service_key: personal_tags})
+
     tag_sets.clear()
 
     with open("hydrus_import_cache.txt", "w", encoding="utf-8") as f:
@@ -662,7 +670,7 @@ def read_tags(prompt_type, params):
     return tags, positive, negative
 
 
-def parse_image(path, default_tags):
+def parse_image(path):
     global cache
 
     try:
@@ -689,11 +697,11 @@ def parse_image(path, default_tags):
 
     tags.add(f"prompt_type:{prompt_type}")
 
-    return PromptParseResult(path, parameters, tags, default_tags, positive, negative)
+    return PromptParseResult(path, parameters, tags, positive, negative)
 
 
-def import_path(client, target_path, service_key, tags=(), recursive=True):
-    default_tags = tags
+def import_path(client, target_path, service_key, personal_service_key, tags=(), recursive=True):
+    personal_tags = tags
     tag_sets = collections.defaultdict(list)
 
     i = 0
@@ -708,7 +716,7 @@ def import_path(client, target_path, service_key, tags=(), recursive=True):
             # print(f"!!! SKIPPING (in cache): {path}")
             continue
 
-        result = parse_image(realpath, default_tags)
+        result = parse_image(realpath)
         if result is None:
             continue
 
@@ -716,10 +724,10 @@ def import_path(client, target_path, service_key, tags=(), recursive=True):
 
         i += 1
         if i >= MAX_IMPORT_SIZE:
-            do_import(client, service_key, tag_sets)
+            do_import(client, service_key, personal_service_key, tag_sets, personal_tags)
             i = 0
 
-    do_import(client, service_key, tag_sets)
+    do_import(client, service_key, personal_service_key, tag_sets, personal_tags)
 
 
 def cmd_import(arguments, client):
@@ -735,7 +743,13 @@ def cmd_import(arguments, client):
         .get("service", {})
         .get("service_key", None)
     )
-    if not service_key:
+    personal_service_key = (
+        client.get_service(service_name=arguments.personal_service)
+        .get("service", {})
+        .get("service_key", None)
+    )
+
+    if not service_key or not personal_service_key:
         print(f"Unknown hydrus service: {arguments.service}")
         exit(1)
 
@@ -747,6 +761,7 @@ def cmd_import(arguments, client):
                 client,
                 path,
                 service_key,
+                personal_service_key,
                 arguments.tags,
                 arguments.recursive,
             )
@@ -763,20 +778,22 @@ NOTE_NAMES = ["filename", "parameters", "positive", "negative"]
 
 def cmd_retag(arguments, client):
     # keep_tags = ["board", "site", "gen_type"]
-    all_file_ids = client.search_files(arguments.query)
+    all_file_ids = client.search_files(arguments.query)["file_ids"]
+    print(all_file_ids)
     service_key = None
     for file_ids in hydrus_api.utils.yield_chunks(all_file_ids, 100):
         metas = client.get_file_metadata(file_ids=file_ids, include_notes=True)
         if service_key is None:
             service_key = next(
                 filter(
-                    lambda k: metas[0]["tags"][k]["name"] == arguments.service,
-                    metas[0]["tags"].keys(),
+                    lambda k: metas["metadata"][0]["tags"][k]["name"] == arguments.service,
+                    metas["metadata"][0]["tags"].keys(),
                 )
             )
+            print(f"{arguments.service} service key: {service_key}")
             assert service_key
 
-        for meta in metas:
+        for meta in metas["metadata"]:
             print(f"- {meta['hash']}")
             needs_update = False
             file_id = meta["file_id"]
@@ -789,6 +806,8 @@ def cmd_retag(arguments, client):
 
             parameters = notes.get("parameters", None)
             prompt_type = next((tag for tag in existing_tags if tag.startswith("prompt_type:")), None)
+            if prompt_type is not None:
+                prompt_type = prompt_type.removeprefix("prompt_type:")
 
             if parameters is None or prompt_type is None:
                 needs_update = True
@@ -801,7 +820,8 @@ def cmd_retag(arguments, client):
                     if parameters is None:
                         continue
 
-            if prompt_type is None or parameters is None:
+            if parameters is None or prompt_type is None:
+                print(f"Cannot detect parameters in image! {file_id}")
                 continue
 
             new_tags, positive, negative = read_tags(prompt_type, parameters)
@@ -809,15 +829,15 @@ def cmd_retag(arguments, client):
                 print(f"No tags parsed in existing image! {file_id}")
                 continue
 
+            new_tags = set([t.lower() for t in new_tags])
+
             needs_update = (
                 needs_update or (existing_tags - new_tags) or (new_tags - existing_tags)
             )
 
             if needs_update:
-                print("exist - new:")
-                pp(existing_tags - new_tags)
-                print("new - exist:")
-                pp(new_tags - existing_tags)
+                print(f"removing tags: {len(existing_tags - new_tags)}")
+                print(f"adding tags: {len(new_tags - existing_tags)}")
                 print("================")
 
                 params_delete = {

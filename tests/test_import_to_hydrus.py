@@ -207,8 +207,7 @@ Steps: 40, Sampler: DPM++ 2M Karras, CFG scale: 9, Seed: 2976004442, Size: 576x5
     def test_imports_nai(self):
         metadata = '{"Description": "{artist:nishikasai munieru}, 1girl, barefoot, solo, spread toes, soles, night, lamp, on bed, bedroom, moody, knees together, best quality, amazing quality, very aesthetic, absurdres", "Software": "NovelAI", "Source": "Stable Diffusion XL C1E1DE52", "Generation time": "12.132191160926595", "Comment": "{\\"prompt\\": \\"nishikasai munieru, 1girl, barefoot, solo, spread toes, soles, night, lamp, on bed, bedroom, moody, knees together, best quality, amazing quality, very aesthetic, absurdres\\", \\"steps\\": 28, \\"height\\": 1856, \\"width\\": 1280, \\"scale\\": 5.0, \\"uncond_scale\\": 1.0, \\"cfg_rescale\\": 0.0, \\"seed\\": 2668694883, \\"n_samples\\": 1, \\"hide_debug_overlay\\": false, \\"noise_schedule\\": \\"native\\", \\"sampler\\": \\"k_euler\\", \\"controlnet_strength\\": 1.0, \\"controlnet_model\\": null, \\"dynamic_thresholding\\": false, \\"dynamic_thresholding_percentile\\": 0.999, \\"dynamic_thresholding_mimic_scale\\": 10.0, \\"sm\\": false, \\"sm_dyn\\": false, \\"skip_cfg_below_sigma\\": 0.0, \\"lora_unet_weights\\": null, \\"lora_clip_weights\\": null, \\"strength\\": 0.5, \\"noise\\": 0.0, \\"extra_noise_seed\\": 2668694883, \\"legacy\\": false, \\"uc\\": \\"nsfw, lowres, {bad}, error, fewer, extra, missing, worst quality, jpeg artifacts, bad quality, watermark, unfinished, displeasing, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract], worst quality, low quality, artist name, signature, watermark\\", \\"request_type\\": \\"Img2ImgRequest\\"}"}'
 
-        result = json.loads(metadata)
-        tags, positive, negative = import_to_hydrus.parse_nai_prompt(result)
+        tags, positive, negative = import_to_hydrus.parse_nai_prompt(metadata)
 
         self.assertEqual(tags,
             {'very_aesthetic',
