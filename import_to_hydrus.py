@@ -19,6 +19,7 @@
 import argparse
 import collections
 from collections import defaultdict
+from dataclasses import dataclass
 from io import BytesIO
 import os
 import re
@@ -40,6 +41,7 @@ import hydrus_api.utils
 def null_handler(signum, frame):
     pass
 
+MAX_IMPORT_SIZE = 100
 
 ERROR_EXIT_CODE = 1
 REQUIRED_PERMISSIONS = {
@@ -236,7 +238,7 @@ def parse_comfyui_prompt(prompt):
             negative = neg
 
     if positive is None:
-        return set()
+        return None, None, None
 
     tokens = set()
     settings = []  # TODO
@@ -324,6 +326,7 @@ def parse_nai_prompt(data):
 def is_naiv3_metadata(result):
     return "Software" in result \
         and result["Software"] == "NovelAI" \
+        and "Source" in result \
         and result["Source"].startswith("Stable Diffusion XL")
 
 def read_info_from_image_stealth(image):
@@ -561,50 +564,126 @@ def parse_a1111_prompt(params):
     return tags, orig_prompt.strip(), negatives.removeprefix("negative:").strip()
 
 
-def import_path(client, path, service_key, tags=(), recursive=True):
+
+@dataclass
+class PromptParseResult:
+    realpath: str
+    parameters: any
+    tags: set[str]
+    positive: str
+    negative: str
+
+
+def do_import(client, service_key, tag_sets):
+    global cache
+
+    original_sigint = signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGINT, null_handler)
+
+    for tags, parse_results in tqdm.tqdm(tag_sets.items()):
+        paths = [pr.realpath for pr in parse_results]
+        results = hydrus_api.utils.add_and_tag_files(
+            client, paths, tags, tag_service_keys=[service_key]
+        )
+        for parse_result, result in zip(parse_results, results):
+            path = parse_result.realpath
+            status = result.get("status", 4)
+
+            if status == 1 or status == 2:
+                cache.add(path)
+                if "hash" in result:
+                    image = Image.open(path)
+                    image.load()
+                    client.set_notes(
+                        {"filename": parse_result.realpath,
+                            "parameters": parse_result.parameters,
+                            "positive": parse_result.positive,
+                            "negative": parse_result.negative
+                            },
+                        hash_=result["hash"],
+                    )
+    tag_sets.clear()
+
+    with open("hydrus_import_cache.txt", "w", encoding="utf-8") as f:
+        for line in cache:
+            f.write(line + "\n")
+
+    signal.signal(signal.SIGINT, original_sigint)
+
+
+def parse_image(path, default_tags):
+    global cache
+
+    try:
+        image = Image.open(path)
+        image.load()
+
+        extrema = image.convert("L").getextrema()
+        if extrema == (0, 0):
+            print(f"!!! SKIPPING (all black): {path}")
+            cache.add(path)
+            return None
+
+    except Exception as ex:
+        print(f"!!! FAILED to open: {path} ({ex})")
+        return None
+
+    params = ""
+    tags = []
+    positive = ""
+    negative = ""
+
+    if "parameters" in image.info:  # A1111
+        prompt_type = "a1111"
+        params = image.info["parameters"]
+        tags, positive, negative = parse_a1111_prompt(params)
+    elif "prompt" in image.info:  # ComfyUI
+        prompt_type = "comfyui"
+        params = image.info["prompt"]
+        tags, positive, negative = parse_comfyui_prompt(params)
+        if tags is None:
+            return None
+    elif is_naiv3_metadata(image.info): # NAI
+        result = {}
+        for key in ["Title", "Description", "Software", "Source", "Generation time", "Comment"]:
+            result[key] = image.info[key]
+        prompt_type = "nai_v3"
+        params = json.dumps(result)
+        tags, positive, negative = parse_nai_prompt(result)
+    else:
+        try:
+            result_str = read_info_from_image_stealth(image)
+            if result_str is not None:
+                try:
+                    # NAIv3
+                    result = json.loads(result_str)
+                    if is_naiv3_metadata(result):
+                        prompt_type = "nai_v3"
+                        params = result_str
+                        tags, positive, negative = parse_nai_prompt(result)
+                    else:
+                        return None
+                except Exception:
+                    return None
+            else:
+                return None
+        except Exception as ex:
+            print(ex)
+            return None
+
+    tags.update(default_tags)
+    tags.add(f"prompt_type:{prompt_type}")
+
+    return PromptParseResult(path, params, tags, positive, negative)
+
+
+def import_path(client, target_path, service_key, tags=(), recursive=True):
     default_tags = tags
-    tag_sets = collections.defaultdict(set)
-    parameters = {}
-    positives = {}
-    negatives = {}
-
-    def do_import(tag_sets, parameters):
-        global cache
-
-        original_sigint = signal.getsignal(signal.SIGINT)
-        signal.signal(signal.SIGINT, null_handler)
-
-        for tags, paths in tqdm.tqdm(tag_sets.items()):
-            results = hydrus_api.utils.add_and_tag_files(
-                client, paths, tags, tag_service_keys=[service_key]
-            )
-            for path, result in zip(paths, results):
-                status = result.get("status", 4)
-
-                if status == 1 or status == 2:
-                    cache.add(path)
-                    if "hash" in result:
-                        image = Image.open(path)
-                        image.load()
-                        params = parameters[path]
-                        positive = positives[path]
-                        negative = negatives[path]
-                        client.set_notes(
-                            {"filename": path, "parameters": params, "positive": positive, "negative": negative},
-                            hash_=result["hash"],
-                        )
-        tag_sets.clear()
-        parameters.clear()
-
-        with open("hydrus_import_cache.txt", "w", encoding="utf-8") as f:
-            for line in cache:
-                f.write(line + "\n")
-
-        signal.signal(signal.SIGINT, original_sigint)
+    tag_sets = collections.defaultdict(list)
 
     i = 0
 
-    for path in tqdm.tqdm(list(yield_paths(path, valid_file_path, recursive))):
+    for path in tqdm.tqdm(list(yield_paths(target_path, valid_file_path, recursive))):
         print(path)
         if os.path.splitext(path)[1].lower() != ".png":
             continue
@@ -614,77 +693,18 @@ def import_path(client, path, service_key, tags=(), recursive=True):
             # print(f"!!! SKIPPING (in cache): {path}")
             continue
 
-        directory_path, filename = os.path.split(path)
-        try:
-            image = Image.open(path)
-            image.load()
-
-            extrema = image.convert("L").getextrema()
-            if extrema == (0, 0):
-                print(f"!!! SKIPPING (all black): {path}")
-                cache.add(path)
-                continue
-
-        except Exception as ex:
-            print(f"!!! FAILED to open: {path} ({ex})")
+        result = parse_image(realpath, default_tags)
+        if result is None:
             continue
 
-        params = ""
-        tags = []
-        positive = ""
-        negative = ""
-
-        if "parameters" in image.info:  # A1111
-            prompt_type = "a1111"
-            params = image.info["parameters"]
-            tags, positive, negative = parse_a1111_prompt(params)
-        elif "prompt" in image.info:  # ComfyUI
-            prompt_type = "comfyui"
-            params = image.info["prompt"]
-            tags, positive, negative = parse_comfyui_prompt(params)
-            if tags is None:
-                continue
-        elif is_naiv3_metadata(image.info): # NAI
-            result = {}
-            for key in ["Title", "Description", "Software", "Source", "Generation time", "Comment"]:
-                result[key] = image.info[key]
-            prompt_type = "nai_v3"
-            params = json.dumps(result)
-            tags, positive, negative = parse_nai_prompt(result)
-        else:
-            try:
-                result_str = read_info_from_image_stealth(image)
-                if result_str is not None:
-                    try:
-                        # NAIv3
-                        result = json.loads(result_str)
-                        if is_naiv3_metadata(result):
-                            prompt_type = "nai_v3"
-                            params = result_str
-                            tags, positive, negative = parse_nai_prompt(result)
-                        else:
-                            continue
-                    except Exception:
-                        continue
-                else:
-                    continue
-            except Exception as ex:
-                print(ex)
-                continue
-
-        tags.update(default_tags)
-        tags.add(f"prompt_type:{prompt_type}")
-        tag_sets[tuple(sorted(tags))].add(realpath)
-        parameters[realpath] = params
-        positives[realpath] = positive
-        negatives[realpath] = negative
+        tag_sets[tuple(sorted(result.tags))].append(result)
 
         i += 1
-        if i >= 100:
-            do_import(tag_sets, parameters)
+        if i >= MAX_IMPORT_SIZE:
+            do_import(client, service_key, tag_sets)
             i = 0
 
-    do_import(tag_sets, parameters)
+    do_import(client, service_key, tag_sets)
 
 
 def cmd_import(arguments, client):
